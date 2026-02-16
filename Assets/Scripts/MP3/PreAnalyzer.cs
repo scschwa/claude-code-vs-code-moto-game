@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
+using DesertRider.Audio;
 
 namespace DesertRider.MP3
 {
@@ -47,27 +48,93 @@ namespace DesertRider.MP3
         /// <param name="mp3Path">Path to the MP3 file.</param>
         /// <param name="songData">SongData object to populate with analysis results.</param>
         /// <returns>Complete AnalysisData containing beats, intensity curve, BPM, and level seed.</returns>
-        public async Task<AnalysisData> PreAnalyzeSong(string mp3Path, SongData songData)
+        public Task<AnalysisData> PreAnalyzeSong(string mp3Path, SongData songData)
         {
-            // TODO: Load full waveform using MP3Loader.LoadMP3Waveform()
-            // TODO: Initialize analysis data structures (lists for beats, intensity curve)
+            Debug.Log($"PreAnalyzer: Starting analysis of {mp3Path}");
 
-            // TODO: Perform FFT analysis across entire song:
-            //   - Iterate through waveform in windows (hopSize apart)
-            //   - Apply Hamming window to each chunk
-            //   - Perform FFT using Unity-Beat-Detection library or custom FFT
-            //   - Calculate spectral flux (difference between consecutive spectra)
-            //   - Detect beats when flux exceeds dynamic threshold
-            //   - Calculate RMS intensity for each window
+            // Load full waveform using MP3Loader
+            MP3Loader loader = MP3Loader.Instance;
+            if (loader == null)
+            {
+                Debug.LogError("PreAnalyzer: MP3Loader instance not found!");
+                return Task.FromResult<AnalysisData>(null);
+            }
 
-            // TODO: Estimate BPM from detected beats using EstimateBPM()
-            // TODO: Generate deterministic level seed using GenerateSeed()
-            // TODO: Save analysis data to disk (JSON file)
-            // TODO: Add progress reporting for UI
+            float[] samples = loader.LoadMP3Waveform(mp3Path);
+            int sampleRate = loader.SampleRate;
+            float duration = loader.Duration;
 
-            // See TECHNICAL_PLAN.md Section 4.1 for complete implementation example
+            Debug.Log($"PreAnalyzer: Loaded {samples.Length} samples, {duration:F2}s");
 
-            throw new NotImplementedException("See TECHNICAL_PLAN.md Section 4.1 and 4.3 for implementation");
+            // Initialize analysis data structures
+            AnalysisData analysisData = new AnalysisData
+            {
+                Beats = new List<BeatEvent>(),
+                IntensityCurve = new List<float>(),
+                SampleRate = sampleRate,
+                Duration = duration
+            };
+
+            List<float> fluxHistory = new List<float>();
+            float[] previousSpectrum = null;
+
+            // Perform FFT analysis across entire song
+            int windowCount = 0;
+            for (int i = 0; i + fftSize < samples.Length; i += hopSize)
+            {
+                // Extract window
+                float[] window = new float[fftSize];
+                Array.Copy(samples, i, window, 0, fftSize);
+
+                // Calculate RMS intensity for this window
+                float intensity = CalculateRMS(window);
+                analysisData.IntensityCurve.Add(intensity);
+
+                // Perform FFT (Hamming window applied inside)
+                float[] spectrum = PerformFFT(window);
+
+                // Calculate spectral flux (difference from previous spectrum)
+                if (previousSpectrum != null)
+                {
+                    float flux = 0f;
+                    for (int j = 0; j < spectrum.Length; j++)
+                    {
+                        // Only positive differences (increases in energy)
+                        float diff = spectrum[j] - previousSpectrum[j];
+                        if (diff > 0)
+                            flux += diff;
+                    }
+
+                    fluxHistory.Add(flux);
+
+                    // Detect beat if flux exceeds threshold
+                    float threshold = GetThreshold(fluxHistory);
+                    if (flux > threshold && flux > 0.1f) // Minimum flux to avoid noise
+                    {
+                        float time = (float)i / sampleRate;
+                        analysisData.Beats.Add(new BeatEvent
+                        {
+                            Time = time,
+                            Strength = flux
+                        });
+                    }
+                }
+
+                previousSpectrum = spectrum;
+                windowCount++;
+            }
+
+            Debug.Log($"PreAnalyzer: Processed {windowCount} windows, detected {analysisData.Beats.Count} beats");
+
+            // Estimate BPM from detected beats
+            analysisData.BPM = EstimateBPM(analysisData.Beats);
+
+            // Generate deterministic level seed
+            analysisData.LevelSeed = GenerateSeed(analysisData.Beats, analysisData.IntensityCurve, analysisData.BPM);
+
+            Debug.Log($"PreAnalyzer: Analysis complete! BPM={analysisData.BPM:F1}, Seed={analysisData.LevelSeed}");
+
+            return Task.FromResult(analysisData);
         }
 
         /// <summary>
@@ -77,12 +144,13 @@ namespace DesertRider.MP3
         /// <returns>Frequency spectrum magnitudes.</returns>
         private float[] PerformFFT(float[] samples)
         {
-            // TODO: Apply Hamming window to reduce spectral leakage
-            // TODO: Perform FFT using Unity-Beat-Detection library or custom implementation
-            // TODO: Calculate magnitude spectrum from complex FFT output
-            // TODO: Return magnitude array (typically fftSize/2 length)
+            // Apply Hamming window to reduce spectral leakage
+            SimpleFFT.ApplyHammingWindow(samples);
 
-            throw new NotImplementedException("Use Unity-Beat-Detection library or implement custom FFT");
+            // Perform FFT and get magnitude spectrum
+            float[] spectrum = SimpleFFT.Compute(samples);
+
+            return spectrum;
         }
 
         /// <summary>
@@ -92,11 +160,21 @@ namespace DesertRider.MP3
         /// <returns>Threshold value for beat detection.</returns>
         private float GetThreshold(List<float> fluxHistory)
         {
-            // TODO: Calculate mean of recent flux values
-            // TODO: Multiply by threshold multiplier
-            // TODO: Use sliding window (e.g., last 100 values) for adaptive threshold
+            if (fluxHistory.Count == 0)
+                return 0f;
 
-            throw new NotImplementedException();
+            // Use sliding window of last 100 values for adaptive threshold
+            int windowSize = Mathf.Min(100, fluxHistory.Count);
+            int startIndex = Mathf.Max(0, fluxHistory.Count - windowSize);
+
+            float sum = 0f;
+            for (int i = startIndex; i < fluxHistory.Count; i++)
+            {
+                sum += fluxHistory[i];
+            }
+
+            float mean = sum / windowSize;
+            return mean * thresholdMultiplier;
         }
 
         /// <summary>
@@ -106,12 +184,21 @@ namespace DesertRider.MP3
         /// <returns>RMS intensity value (0.0 to 1.0).</returns>
         private float CalculateRMS(float[] samples)
         {
-            // TODO: Sum squares of all samples
-            // TODO: Divide by sample count
-            // TODO: Take square root
-            // TODO: Normalize to 0.0-1.0 range
+            if (samples.Length == 0)
+                return 0f;
 
-            throw new NotImplementedException();
+            // Sum squares of all samples
+            float sumOfSquares = 0f;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                sumOfSquares += samples[i] * samples[i];
+            }
+
+            // Calculate RMS: sqrt(mean(squares))
+            float rms = Mathf.Sqrt(sumOfSquares / samples.Length);
+
+            // Clamp to 0.0-1.0 range (samples are already normalized to -1 to 1)
+            return Mathf.Clamp01(rms);
         }
 
         /// <summary>
@@ -121,12 +208,37 @@ namespace DesertRider.MP3
         /// <returns>Estimated BPM value.</returns>
         private float EstimateBPM(List<BeatEvent> beats)
         {
-            // TODO: Calculate intervals between consecutive beats
-            // TODO: Find median or mode interval (most common)
-            // TODO: Convert interval to BPM: BPM = 60 / interval
-            // TODO: Handle edge cases (very fast/slow songs, irregular rhythms)
+            if (beats.Count < 2)
+                return 120f; // Default BPM if not enough beats
 
-            throw new NotImplementedException("See TECHNICAL_PLAN.md Section 4.3");
+            // Calculate intervals between consecutive beats
+            List<float> intervals = new List<float>();
+            for (int i = 1; i < beats.Count; i++)
+            {
+                float interval = beats[i].Time - beats[i - 1].Time;
+                // Filter out very short/long intervals (likely false positives)
+                if (interval > 0.2f && interval < 2.0f)
+                {
+                    intervals.Add(interval);
+                }
+            }
+
+            if (intervals.Count == 0)
+                return 120f;
+
+            // Find median interval (more robust than mean)
+            intervals.Sort();
+            float medianInterval = intervals[intervals.Count / 2];
+
+            // Convert interval to BPM: BPM = 60 / interval
+            float bpm = 60f / medianInterval;
+
+            // Clamp to reasonable range (40-200 BPM)
+            bpm = Mathf.Clamp(bpm, 40f, 200f);
+
+            Debug.Log($"PreAnalyzer: Estimated BPM = {bpm:F1} from {beats.Count} beats");
+
+            return bpm;
         }
 
         /// <summary>
@@ -139,33 +251,36 @@ namespace DesertRider.MP3
         /// <returns>Deterministic integer seed.</returns>
         private int GenerateSeed(List<BeatEvent> beats, List<float> intensityCurve, float bpm)
         {
-            // TODO: Create deterministic seed from audio features:
-            //   - Hash beat positions (first 100 beats)
-            //   - Include BPM in seed
-            //   - Include average intensity
-            //   - Use XOR operations to combine values
-
-            // See TECHNICAL_PLAN.md Section 4.1 for complete algorithm:
-            /*
             int seed = 0;
 
-            // Hash beat positions
-            for (int i = 0; i < Mathf.Min(100, beats.Count); i++)
+            // Hash beat positions (first 100 beats)
+            int beatCount = Mathf.Min(100, beats.Count);
+            for (int i = 0; i < beatCount; i++)
             {
-                seed ^= (int)(beats[i].Time * 1000) << (i % 16);
+                // Use beat time and strength to create unique hash
+                int beatHash = (int)(beats[i].Time * 1000) ^ (int)(beats[i].Strength * 1000);
+                seed ^= beatHash << (i % 16);
             }
 
-            // Include BPM
+            // Include BPM in seed
             seed ^= (int)(bpm * 100);
 
             // Include average intensity
-            float avgIntensity = intensityCurve.Average();
-            seed ^= (int)(avgIntensity * 10000);
+            if (intensityCurve.Count > 0)
+            {
+                float avgIntensity = intensityCurve.Average();
+                seed ^= (int)(avgIntensity * 10000);
+            }
+
+            // Include song duration for additional uniqueness
+            if (intensityCurve.Count > 0)
+            {
+                seed ^= intensityCurve.Count;
+            }
+
+            Debug.Log($"PreAnalyzer: Generated deterministic seed = {seed}");
 
             return seed;
-            */
-
-            throw new NotImplementedException("See TECHNICAL_PLAN.md Section 4.1");
         }
 
         /// <summary>

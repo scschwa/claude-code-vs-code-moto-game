@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(\"/c/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Unity.exe\" -quit -batchmode -createProject \"/c/Users/svenftw/OneDrive/claude_code_vscode-moto-game/DesertRider\" -projectTemplate \"com.unity.template.urp\")",
+      "Bash(\"/c/Program Files/Unity/Hub/Editor/6000.3.8f1/Editor/Unity.exe\" -quit -batchmode -createProject \"/c/Users/svenftw/OneDrive/claude_code_vscode-moto-game\" -projectTemplate \"com.unity.template.urp\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(wc -l:*)",
+      "Bash(unzip:*)",
+      "Bash(git clone:*)",
+      "Bash(uuidgen:*)",
+      "Bash(test:*)",
+      "Bash(cat:*)"
+    ]
+  }
+}
