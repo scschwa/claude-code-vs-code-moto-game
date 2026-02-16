@@ -36,9 +36,17 @@ namespace DesertRider.Terrain
         [Tooltip("Curve intensity multiplier")]
         public float curveIntensity = 5f;
 
+        [Header("Enhanced Features")]
+        [Tooltip("Enable road banking on curves")]
+        public bool enableBanking = false;
+
+        [Tooltip("Banking angle in degrees")]
+        public float bankingAngle = 0f;
+
         private MeshFilter meshFilter;
         private MeshRenderer meshRenderer;
         private Mesh mesh;
+        private RampFeature rampFeature;
 
         /// <summary>
         /// Gets the world-space end position of this segment.
@@ -96,6 +104,14 @@ namespace DesertRider.Terrain
                 // Calculate height from intensity
                 float height = baseHeight + intensity * heightIntensity;
 
+                // Apply ramp feature if present
+                rampFeature = GetComponent<RampFeature>();
+                if (rampFeature != null)
+                {
+                    float rampHeightMod = rampFeature.GetHeightModificationAt(zNormalized);
+                    height += rampHeightMod;
+                }
+
                 // Calculate curve offset (more curve as we go further along segment)
                 float curveOffset = curveAmount * curveIntensity * zNormalized * zNormalized;
 
@@ -108,6 +124,16 @@ namespace DesertRider.Terrain
                     if (z == 0 && previousEndHeights != null && x < previousEndHeights.Length)
                     {
                         finalHeight = previousEndHeights[x];
+                    }
+
+                    // Apply banking to vertex positions (rotate around forward axis)
+                    if (enableBanking && Mathf.Abs(curveAmount) > 0.01f)
+                    {
+                        float bankAngle = curveAmount * bankingAngle * Mathf.Deg2Rad;
+
+                        // Banking creates height variation across width
+                        float bankHeightOffset = Mathf.Sin(bankAngle) * xPos;
+                        finalHeight += bankHeightOffset;
                     }
 
                     // Store end heights for next segment
@@ -183,12 +209,63 @@ namespace DesertRider.Terrain
             }
         }
 
+        /// <summary>
+        /// Sets material color for visual variety.
+        /// </summary>
+        /// <param name="color">Color to apply to the material</param>
+        public void SetMaterialColor(Color color)
+        {
+            MeshRenderer renderer = GetComponent<MeshRenderer>();
+            if (renderer != null && renderer.material != null)
+            {
+                // Create material instance to avoid affecting other segments
+                renderer.material = new Material(renderer.material);
+                renderer.material.color = color;
+            }
+        }
+
         void OnDestroy()
         {
             if (mesh != null)
             {
                 Destroy(mesh);
             }
+        }
+
+        /// <summary>
+        /// Gets world position for a normalized position on this segment.
+        /// </summary>
+        /// <param name="zNormalized">Normalized Z position (0 = start, 1 = end)</param>
+        /// <param name="xOffset">Lateral offset from center (negative = left, positive = right)</param>
+        /// <returns>World position on this segment</returns>
+        public Vector3 GetPositionOnSegment(float zNormalized, float xOffset)
+        {
+            float zLocal = zNormalized * segmentLength;
+
+            // Sample height at this position using raycast
+            float height = SampleHeightAtPosition(zNormalized);
+
+            Vector3 localPos = new Vector3(xOffset, height + 1.5f, zLocal);
+            return transform.TransformPoint(localPos);
+        }
+
+        /// <summary>
+        /// Samples the height of the road at a normalized position.
+        /// </summary>
+        private float SampleHeightAtPosition(float zNormalized)
+        {
+            // Cast ray from above to find road surface
+            Vector3 testPos = transform.TransformPoint(new Vector3(0, 100f, zNormalized * segmentLength));
+
+            RaycastHit hit;
+            if (Physics.Raycast(testPos, Vector3.down, out hit, 200f))
+            {
+                // Convert hit point back to local space to get height
+                return transform.InverseTransformPoint(hit.point).y;
+            }
+
+            // Fallback to base height if raycast fails
+            return baseHeight;
         }
 
         /// <summary>

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using DesertRider.MP3;
 
@@ -60,6 +61,14 @@ namespace DesertRider.Terrain
 
         [Tooltip("Strength of Perlin noise height offset")]
         public float perlinStrength = 2f;
+
+        [Header("Gameplay")]
+        [Tooltip("Estimated player speed for time-to-distance conversion")]
+        public float estimatedSpeed = 20f;
+
+        [Header("Enhanced Features")]
+        [Tooltip("Configuration for terrain features (ramps, banking, colors)")]
+        public TerrainFeatureConfig featureConfig = new TerrainFeatureConfig();
 
         [Header("Debug")]
         [Tooltip("Show generation debug info in console")]
@@ -157,6 +166,27 @@ namespace DesertRider.Terrain
             // Calculate curve amount based on music or Perlin noise
             float curveAmount = CalculateCurveAmount();
 
+            // Determine if this segment should have special features
+            bool shouldHaveJump = ShouldSpawnJump(intensityValues);
+            bool shouldHaveBanking = Mathf.Abs(curveAmount) > featureConfig.bankingCurveThreshold;
+
+            // Configure banking
+            if (featureConfig.enableBanking && shouldHaveBanking)
+            {
+                segment.enableBanking = true;
+                segment.bankingAngle = featureConfig.maxBankAngle;
+            }
+
+            // Add ramp feature if conditions met
+            if (featureConfig.enableJumps && shouldHaveJump && currentSegmentIndex > 3) // Not on first 3 segments
+            {
+                RampFeature ramp = segmentObj.AddComponent<RampFeature>();
+                ramp.rampStartZ = 0.2f;
+                ramp.rampEndZ = 0.2f + featureConfig.rampLengthFraction;
+                ramp.rampHeight = featureConfig.rampHeight;
+                ramp.rampCurve = featureConfig.rampProfile;
+            }
+
             // Apply Perlin noise to base height if enabled
             if (usePerlinNoise)
             {
@@ -184,8 +214,36 @@ namespace DesertRider.Terrain
                 Debug.LogWarning($"TerrainGenerator: No road material assigned! Segment {currentSegmentIndex} will appear white/pink.");
             }
 
+            // Apply color variation based on intensity
+            if (featureConfig.enableColorVariation && intensityValues != null && intensityValues.Length > 0)
+            {
+                float avgIntensity = intensityValues.Average();
+                Color segmentColor = featureConfig.intensityColorGradient.Evaluate(avgIntensity);
+                segment.SetMaterialColor(segmentColor);
+            }
+
             // Ensure segment is on correct layer for collision detection (Layer 0 = Default)
             segmentObj.layer = 0;
+
+            // Add SegmentObjectTracker component for managing spawned objects
+            SegmentObjectTracker tracker = segmentObj.AddComponent<SegmentObjectTracker>();
+
+            // Calculate segment start time for spawning (used by both collectibles and obstacles)
+            float segmentStartTime = currentSegmentIndex * (segmentLength / estimatedSpeed);
+
+            // Spawn collectibles if spawner is available
+            DesertRider.Gameplay.CollectibleSpawner spawner = DesertRider.Gameplay.CollectibleSpawner.Instance;
+            if (spawner != null && analysisData != null)
+            {
+                spawner.SpawnCollectiblesForSegment(segment, segmentStartTime);
+            }
+
+            // Spawn obstacles if spawner is available
+            DesertRider.Gameplay.ObstacleSpawner obstacleSpawner = DesertRider.Gameplay.ObstacleSpawner.Instance;
+            if (obstacleSpawner != null && analysisData != null)
+            {
+                obstacleSpawner.SpawnObstaclesForSegment(segment, segmentStartTime);
+            }
 
             // Add to active segments
             activeSegments.Add(segment);
@@ -266,6 +324,26 @@ namespace DesertRider.Terrain
             float curve = randomCurve * Mathf.Lerp(0.3f, 1.0f, currentIntensity);
 
             return curve;
+        }
+
+        /// <summary>
+        /// Determines if segment should have a jump based on intensity.
+        /// </summary>
+        /// <param name="intensityValues">Array of intensity values for the segment</param>
+        /// <returns>True if jump should be spawned</returns>
+        private bool ShouldSpawnJump(float[] intensityValues)
+        {
+            if (intensityValues == null || intensityValues.Length == 0)
+                return false;
+
+            // Calculate average intensity
+            float avgIntensity = 0f;
+            foreach (float val in intensityValues)
+                avgIntensity += val;
+            avgIntensity /= intensityValues.Length;
+
+            // Spawn jump if intensity exceeds threshold
+            return avgIntensity > featureConfig.jumpIntensityThreshold;
         }
 
         /// <summary>

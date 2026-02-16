@@ -68,6 +68,13 @@ namespace DesertRider.Gameplay
         [Tooltip("Keyboard horizontal axis sensitivity")]
         public float keyboardSensitivity = 1f;
 
+        [Header("Jump Physics")]
+        [Tooltip("Extra upward force when leaving a ramp")]
+        public float jumpBoostForce = 10f;
+
+        [Tooltip("Air control multiplier (steering effectiveness in air)")]
+        public float airControlMultiplier = 0.5f;
+
         #endregion
 
         #region Private State
@@ -82,6 +89,9 @@ namespace DesertRider.Gameplay
         private float steerInput = 0f;
         private float accelerateInput = 0f;
         private bool brakeInput = false;
+
+        // Jump state tracking
+        private bool wasGrounded = false; // Track previous grounded state
 
         #endregion
 
@@ -113,6 +123,13 @@ namespace DesertRider.Gameplay
             rb.linearDamping = 0.5f;
             rb.angularDamping = 2f;
             rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+
+            // Ensure player tag is set for collision detection with collectibles
+            if (!gameObject.CompareTag("Player"))
+            {
+                gameObject.tag = "Player";
+                Debug.Log("MotorcycleController: Set tag to 'Player' for collectible detection");
+            }
         }
 
         void Update()
@@ -132,8 +149,23 @@ namespace DesertRider.Gameplay
 
         void FixedUpdate()
         {
+            // Store previous grounded state
+            wasGrounded = IsGrounded;
+
             // Check if grounded
             CheckGround();
+
+            // Detect takeoff (was grounded, now airborne)
+            if (wasGrounded && !IsGrounded)
+            {
+                OnTakeoff();
+            }
+
+            // Detect landing (was airborne, now grounded)
+            if (!wasGrounded && IsGrounded)
+            {
+                OnLanding();
+            }
 
             // Apply movement
             if (!useLaneSystem)
@@ -224,10 +256,11 @@ namespace DesertRider.Gameplay
                 moveDirection.z * currentSpeed
             );
 
-            // Apply steering rotation
+            // Apply steering rotation (reduced control in air)
             if (Mathf.Abs(steerInput) > 0.01f && currentSpeed > 1f)
             {
-                float turnAmount = steerInput * turnSpeed * Time.fixedDeltaTime;
+                float controlMultiplier = IsGrounded ? 1f : airControlMultiplier;
+                float turnAmount = steerInput * turnSpeed * controlMultiplier * Time.fixedDeltaTime;
                 transform.Rotate(0f, turnAmount, 0f);
             }
         }
@@ -274,6 +307,35 @@ namespace DesertRider.Gameplay
             currentLane += direction;
             currentLane = Mathf.Clamp(currentLane, -2, 2); // Max 5 lanes
             Debug.Log($"Switching to lane {currentLane}");
+        }
+
+        /// <summary>
+        /// Called when motorcycle leaves the ground (takeoff).
+        /// </summary>
+        private void OnTakeoff()
+        {
+            // Apply upward boost when leaving ground (ramp launch)
+            if (rb != null)
+            {
+                rb.AddForce(Vector3.up * jumpBoostForce, ForceMode.Impulse);
+                Debug.Log("Motorcycle airborne! Jump boost applied.");
+            }
+        }
+
+        /// <summary>
+        /// Called when motorcycle returns to ground (landing).
+        /// </summary>
+        private void OnLanding()
+        {
+            // Dampen vertical velocity for smooth landing
+            if (rb != null)
+            {
+                Vector3 vel = rb.linearVelocity;
+                vel.y *= 0.3f; // Reduce vertical velocity by 70%
+                rb.linearVelocity = vel;
+
+                Debug.Log("Motorcycle landed! Speed: " + currentSpeed.ToString("F1"));
+            }
         }
 
         /// <summary>
@@ -362,6 +424,29 @@ namespace DesertRider.Gameplay
             currentSpeed = Mathf.Min(maxSpeed * 1.5f, currentSpeed + boostAmount);
         }
 
+        /// <summary>
+        /// Applies a speed penalty from hitting an obstacle.
+        /// </summary>
+        /// <param name="penaltyFactor">Multiplier (0.5 = reduce to 50% speed)</param>
+        public void ApplySpeedPenalty(float penaltyFactor)
+        {
+            currentSpeed *= penaltyFactor;
+            currentSpeed = Mathf.Max(currentSpeed, maxSpeed * 0.2f); // Don't go below 20% max speed
+
+            Debug.Log($"Speed penalty applied! Factor: {penaltyFactor:F2}, New speed: {currentSpeed:F1}");
+        }
+
         #endregion
+
+        /// <summary>
+        /// Called when motorcycle collides with something.
+        /// </summary>
+        void OnCollisionEnter(Collision collision)
+        {
+            // Log for debugging
+            Debug.Log($"Motorcycle collided with: {collision.gameObject.name} (tag: {collision.gameObject.tag})");
+
+            // Obstacle handles the actual penalty via ApplySpeedPenalty
+        }
     }
 }

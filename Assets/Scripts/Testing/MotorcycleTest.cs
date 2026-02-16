@@ -156,14 +156,29 @@ namespace DesertRider.Testing
                 return;
             }
 
-            // Step 2: Generate initial terrain
-            Debug.Log("Step 2: Generating terrain...");
+            // Step 2: Initialize CollectibleSpawner with analysis data
+            Debug.Log("Step 2: Initializing CollectibleSpawner...");
+            if (DesertRider.Gameplay.CollectibleSpawner.Instance != null)
+            {
+                DesertRider.Gameplay.CollectibleSpawner.Instance.Initialize(analysisData);
+                Debug.Log("✅ CollectibleSpawner initialized");
+            }
+
+            // Initialize ObstacleSpawner with analysis data
+            if (DesertRider.Gameplay.ObstacleSpawner.Instance != null)
+            {
+                DesertRider.Gameplay.ObstacleSpawner.Instance.Initialize(analysisData);
+                Debug.Log("✅ ObstacleSpawner initialized");
+            }
+
+            // Step 3: Generate initial terrain
+            Debug.Log("Step 3: Generating terrain...");
             terrainGenerator.Initialize(analysisData);
             furthestGeneratedZ = terrainGenerator.segmentLength * terrainGenerator.activeSegmentCount;
             Debug.Log($"✅ Terrain initialized ({terrainGenerator.activeSegmentCount} segments)");
 
-            // Step 3: Spawn motorcycle
-            Debug.Log("Step 3: Spawning motorcycle...");
+            // Step 4: Spawn motorcycle
+            Debug.Log("Step 4: Spawning motorcycle...");
 
             // Adjust spawn height to be above the first terrain segment
             // The first segment might have height variation from intensity values
@@ -173,8 +188,8 @@ namespace DesertRider.Testing
             SpawnMotorcycle();
             Debug.Log("✅ Motorcycle spawned");
 
-            // Step 4: Setup camera
-            Debug.Log("Step 4: Setting up camera...");
+            // Step 5: Setup camera
+            Debug.Log("Step 5: Setting up camera...");
             if (cameraFollow != null && motorcycle != null)
             {
                 cameraFollow.SetTarget(motorcycle.transform);
@@ -182,10 +197,10 @@ namespace DesertRider.Testing
                 Debug.Log("✅ Camera configured");
             }
 
-            // Step 5: Start music playback
+            // Step 6: Start music playback
             if (enableMusic && musicPlayer != null)
             {
-                Debug.Log("Step 5: Starting music playback...");
+                Debug.Log("Step 6: Starting music playback...");
                 musicPlayer.PlayMP3(mp3FilePath);
                 Debug.Log("✅ Music playing");
             }
@@ -247,6 +262,38 @@ namespace DesertRider.Testing
                     go.AddComponent<AudioSource>();
                     musicPlayer = go.AddComponent<MusicPlayer>();
                 }
+            }
+
+            // CollectibleSpawner
+            if (DesertRider.Gameplay.CollectibleSpawner.Instance == null)
+            {
+                GameObject go = new GameObject("CollectibleSpawner");
+                go.AddComponent<DesertRider.Gameplay.CollectibleSpawner>();
+                Debug.Log("MotorcycleTest: Created CollectibleSpawner");
+            }
+
+            // ObstacleSpawner
+            if (DesertRider.Gameplay.ObstacleSpawner.Instance == null)
+            {
+                GameObject go = new GameObject("ObstacleSpawner");
+                go.AddComponent<DesertRider.Gameplay.ObstacleSpawner>();
+                Debug.Log("MotorcycleTest: Created ObstacleSpawner");
+            }
+
+            // ScoreManager
+            if (DesertRider.Gameplay.ScoreManager.Instance == null)
+            {
+                GameObject go = new GameObject("ScoreManager");
+                go.AddComponent<DesertRider.Gameplay.ScoreManager>();
+                Debug.Log("MotorcycleTest: Created ScoreManager");
+            }
+
+            // ObjectPoolManager
+            if (DesertRider.Gameplay.ObjectPoolManager.Instance == null)
+            {
+                GameObject go = new GameObject("ObjectPoolManager");
+                go.AddComponent<DesertRider.Gameplay.ObjectPoolManager>();
+                Debug.Log("MotorcycleTest: Created ObjectPoolManager (configure coin pool in Inspector!)");
             }
         }
 
@@ -343,7 +390,7 @@ namespace DesertRider.Testing
             style.fontSize = 14;
             style.normal.textColor = Color.white;
 
-            GUI.Box(new Rect(10, 10, 300, 160), "");
+            GUI.Box(new Rect(10, 10, 300, 200), "");
 
             if (analysisData != null)
             {
@@ -365,8 +412,25 @@ namespace DesertRider.Testing
                 GUI.Label(new Rect(20, 100, 280, 20), $"Input: {(string.IsNullOrEmpty(inputState) ? "None" : inputState)}", style);
             }
 
-            GUI.Label(new Rect(20, 120, 280, 20), "WASD/Arrows: Drive", style);
-            GUI.Label(new Rect(20, 140, 280, 20), "R: Reset | T: Regen Terrain", style);
+            // Display score and combo (if ScoreManager exists)
+            if (DesertRider.Gameplay.ScoreManager.Instance != null)
+            {
+                GUI.Label(new Rect(20, 120, 280, 20), $"Score: {DesertRider.Gameplay.ScoreManager.Instance.currentScore}", style);
+
+                if (DesertRider.Gameplay.ScoreManager.Instance.currentCombo > 1)
+                {
+                    GUIStyle comboStyle = new GUIStyle(style);
+                    comboStyle.normal.textColor = Color.yellow;
+                    GUI.Label(new Rect(20, 140, 280, 20), $"COMBO x{DesertRider.Gameplay.ScoreManager.Instance.currentCombo} (Multiplier: {DesertRider.Gameplay.ScoreManager.Instance.CurrentMultiplier:F2}x)!", comboStyle);
+                }
+                else
+                {
+                    GUI.Label(new Rect(20, 140, 280, 20), $"Coins: {DesertRider.Gameplay.ScoreManager.Instance.coinsCollected}", style);
+                }
+            }
+
+            GUI.Label(new Rect(20, 160, 280, 20), "WASD/Arrows: Drive", style);
+            GUI.Label(new Rect(20, 180, 280, 20), "R: Reset | T: Regen Terrain", style);
         }
     }
 }
