@@ -13,7 +13,7 @@
 *A music-reactive motorcycle odyssey where every song creates a unique journey*
 
 ### Elevator Pitch
-Desert Rider is an arcade-style motorcycle driving game that transforms any song into a dynamic, ever-changing road experience. Inspired by those unforgettable desert road trips with your favorite music playing, the game captures that feeling of freedom and rhythm as the terrain, obstacles, and road itself dance to whatever music you're playing on your computer—whether it's Spotify, YouTube, or your personal collection.
+Desert Rider is an arcade-style motorcycle driving game that transforms any song into a dynamic, handcrafted road experience. Load your favorite MP3s to create deterministic levels with competitive leaderboards, or jump into Free Play mode to cruise along to any music playing on your computer. Inspired by those unforgettable desert road trips, the game captures that feeling of freedom and rhythm as the terrain, obstacles, and road itself dance to the music.
 
 ### Inspiration & Vision
 This game was born from the magic of those teenage road trips across the desert—windows down, music up, watching the endless horizon flow past. The relationship between a great song and an open road creates something transcendent. Desert Rider aims to bottle that feeling and make it interactive.
@@ -25,7 +25,11 @@ This game was born from the magic of those teenage road trips across the desert�
 - The feeling that the right song can transform any journey
 
 **What Makes This Special:**
-Unlike traditional rhythm games that use pre-set tracks, Desert Rider works with ANY music source on your computer. Every song creates a completely unique road—your favorite playlist becomes your personal game world.
+Desert Rider offers two distinct experiences:
+- **MP3 Mode:** Load your music collection to create reproducible levels. Master your favorite songs, compete on leaderboards, and share high scores with friends who have the same tracks.
+- **Free Play Mode:** Unlike traditional rhythm games, this mode works with ANY music source on your computer in real-time—Spotify, YouTube, local files. Every ride is unique, perfect for casual cruising and musical exploration.
+
+Your favorite songs become racetracks you can master or improvise upon.
 
 ### Target Audience
 - Music lovers who enjoy driving/racing games
@@ -60,7 +64,11 @@ At its heart, Desert Rider is an **endless motorcycle driving simulator** with a
 
 ### Music Reactivity System
 
-This is the soul of the game. The music analyzer continuously listens to your system audio and extracts rhythm, intensity, and beat information to drive procedural generation.
+This is the soul of the game. The music analyzer extracts rhythm, intensity, and beat information to drive procedural generation.
+
+**In MP3 Mode:** The entire song is pre-analyzed when loaded, creating a deterministic "music fingerprint" that always generates the same level. This allows for competitive play, replays, and mastery.
+
+**In Free Play Mode:** The analyzer continuously listens to system audio in real-time, reacting dynamically as the music plays. Every ride is unique and improvised.
 
 **What the Music Controls:**
 
@@ -141,10 +149,19 @@ A "run" lasts for one complete song. When the song ends, you get a results scree
 This section bridges design and implementation.
 
 **Audio Analysis Pipeline:**
+
+**MP3 Mode:**
+1. **Load:** Import MP3 file into game library
+2. **Pre-Analyze:** Extract full waveform, perform complete FFT analysis
+3. **Build Profile:** Generate beat map, intensity curve, BPM, audio fingerprint
+4. **Generate Seed:** Create deterministic level seed from audio features
+5. **Play:** Level generates consistently from seed each playthrough
+
+**Free Play Mode:**
 1. **Capture:** Real-time system audio from any source
-2. **Analyze:** Extract frequency spectrum, detect beats, estimate BPM
-3. **Map:** Translate audio features to gameplay parameters
-4. **Generate:** Procedurally create terrain and obstacles based on mapping
+2. **Analyze:** Extract frequency spectrum, detect beats on-the-fly
+3. **Map:** Translate audio features to gameplay parameters in real-time
+4. **Generate:** Procedurally create terrain and obstacles dynamically
 
 **Key Mappings:**
 
@@ -269,27 +286,62 @@ Imagine the lovechild of:
 
 ### Core Modes
 
-#### 1. **Free Ride Mode** (Primary Mode)
-- Play any music source on your computer
-- No failure state—ride until the song ends
-- Focus on high scores, perfect runs, exploration
-- Ideal for just vibing with your favorite tracks
+#### 1. **MP3 Mode** (Primary Competitive Mode)
+The main mode for competitive play and mastery.
 
-#### 2. **Score Attack Mode**
-- Same as Free Ride, but with competitive emphasis
-- Leaderboards per song (if song identification works)
-- Grade requirements (S-rank demands perfection)
-- Replay best runs
+**How It Works:**
+- Select an MP3 file from your music collection
+- Game copies the file to a local game directory
+- Pre-analyzes the entire song to create a deterministic level
+- Same song always generates the same level layout
 
-#### 3. **Endurance Mode**
-- Playlist mode—multiple songs back-to-back
+**Features:**
+- **Deterministic Levels:** Master the same track repeatedly, learn optimal paths
+- **Per-Song Leaderboards:** Compete globally on specific tracks
+- **High Score Tracking:** Personal bests saved for each MP3
+- **Replay System:** Watch your best runs, race against ghost riders
+- **Song Library:** Browse your imported songs, see stats and high scores
+- **Share Challenges:** Friends with the same MP3 can compete directly
+
+**Advantages:**
+- Fair competition (everyone plays the same level)
+- Skill expression through mastery
+- Speedrunning potential
+- Consistent difficulty for each song
+
+#### 2. **Free Play Mode** (Casual Exploration Mode)
+For casual jamming and musical exploration.
+
+**How It Works:**
+- Start playing any music source on your computer (Spotify, YouTube, etc.)
+- Game captures system audio in real-time
+- Level generates dynamically as the music plays
+- Every ride is unique and improvised
+
+**Features:**
+- **No Preparation:** Just press play on any music and ride
+- **Unlimited Variety:** Works with streaming services, any audio source
+- **No Leaderboards:** This is about the experience, not competition
+- **Casual Vibe:** No failure state, pure flow and enjoyment
+- **Musical Discovery:** Great for exploring new music
+
+**Advantages:**
+- Zero friction—works with any audio
+- Perfect for relaxation and vibing
+- Discover how different genres feel
+- No pressure, just ride
+
+#### 3. **Playlist Mode** (MP3 Endurance)
+- Chain multiple MP3s into a marathon session
 - Total score accumulation across songs
 - Limited lives (3 crashes = game over)
-- Unlocks after completing X runs
+- Compete on playlist-based leaderboards
 
 #### 4. **Challenge Mode**
-- Daily/weekly challenges: "Score 10,000 on any EDM track," "No boosts for an entire song"
-- Genre-specific challenges
+- **Daily Challenges:** "Score 10,000 on today's featured track"
+- **Weekly Tracks:** Curated songs with special leaderboards
+- **Achievement Challenges:** "Perfect run on any song," "No boosts for an entire track"
+- **Genre Challenges:** Special objectives for Rock, EDM, Classical, etc.
 - Unlocks motorcycles and customization
 
 ### Additional Features
@@ -300,9 +352,11 @@ Imagine the lovechild of:
 - Ghost rider feature (race against your previous run)
 
 **Leaderboards:**
-- Global high scores (if song fingerprinting is possible)
-- Friend leaderboards
-- Per-genre leaderboards
+- **Per-MP3 Leaderboards:** Global high scores for each imported song (matched by audio hash)
+- **Friend Leaderboards:** Compare scores with friends on shared tracks
+- **Weekly Featured Tracks:** Curated songs with temporary leaderboards
+- **Playlist Leaderboards:** Compete on playlist completion and total scores
+- **No Leaderboards in Free Play Mode:** Real-time audio is non-deterministic
 
 **Customization Shop:**
 - Spend earned coins on cosmetics
@@ -326,21 +380,52 @@ Imagine the lovechild of:
 
 ## 7. Audio Integration
 
-### Music Source Flexibility
-The game doesn't ship with any music. Instead, it captures whatever audio is playing on your system.
+### Dual Audio System
 
+The game supports two distinct audio pipelines for different play modes.
+
+#### MP3 Mode: File-Based Analysis
+**Supported Formats:**
+- MP3 (primary format)
+- Future support: WAV, FLAC, OGG, M4A
+
+**How It Works:**
+1. User selects an MP3 file via file browser
+2. Game copies file to local storage: `[GameDirectory]/MusicLibrary/[hash]/song.mp3`
+3. Pre-analyzes entire file:
+   - Extract full waveform data
+   - Perform FFT analysis across entire song
+   - Detect all beats, calculate BPM
+   - Build intensity curve for full duration
+   - Generate level seed based on audio fingerprint
+4. Level is generated deterministically from this analysis
+5. High scores stored with MP3 hash for leaderboards
+
+**Benefits:**
+- Accurate beat detection (full song context)
+- Better BPM estimation (analyzes complete file)
+- Reproducible levels (same seed every time)
+- Pre-rendered intensity curves for smoother gameplay
+- Enables competitive leaderboards
+
+#### Free Play Mode: Real-Time System Audio
 **Supported Sources:**
-- Spotify
-- YouTube / YouTube Music
-- Apple Music (via web player or app)
-- Local audio files (MP3, FLAC, WAV, etc.)
-- SoundCloud, Bandcamp, streaming services
+- Spotify, YouTube, Apple Music
+- Any streaming service or local player
+- System sounds, podcasts (though not ideal)
 - Literally anything outputting audio on Windows
 
 **Technical Approach:**
-- WASAPI loopback recording (captures system audio)
+- WASAPI loopback recording (captures "what you hear")
 - Real-time FFT analysis for beat detection
 - Low-latency processing (<50ms)
+- Dynamic level generation on-the-fly
+
+**Benefits:**
+- Zero friction—just play music and go
+- Works with subscription services (no file needed)
+- Great for music discovery
+- Casual, pressure-free experience
 
 ### Audio Calibration
 
@@ -359,11 +444,17 @@ Different music genres have different beat structures. Metal has fast, aggressiv
 3. Game calculates optimal settings
 4. Save profile for that music type
 
-### Song Recognition (Optional Feature)
-If technically feasible, use audio fingerprinting (like AcoustID / Shazam API) to:
-- Display song name and artist
-- Create song-specific leaderboards
-- Build playlists of "best riding songs"
+### MP3 Metadata & Organization
+**MP3 Mode:**
+- Automatically extract ID3 tags (song title, artist, album, album art)
+- Display metadata in song library
+- Organize by artist, album, genre (from ID3 tags)
+- Search and filter imported songs
+
+**Audio Fingerprinting (Optional):**
+- Hash MP3 files for global leaderboard matching
+- Players with identical MP3 files compete on same leaderboard
+- Prevents cheating (can't modify audio to get easier levels)
 
 ---
 
@@ -371,16 +462,21 @@ If technically feasible, use audio fingerprinting (like AcoustID / Shazam API) t
 
 ### First Launch
 1. **Splash Screen:** Logo, vibe-setting visuals
-2. **Tutorial:** Brief interactive guide (30 seconds)
-   - "Start playing music on your computer"
+2. **Welcome Screen:** "Import your first song to begin"
+3. **Tutorial Song Import:**
+   - File browser opens automatically
+   - "Select an MP3 file from your music collection"
+   - Quick analysis of selected song
+4. **Interactive Tutorial:** Brief guided ride (30 seconds)
    - "Use left stick to steer"
    - "Collect coins, avoid obstacles"
    - "The road reacts to your music—enjoy the ride"
-3. **Calibration:** Quick audio setup wizard
-4. **Main Menu:** Clean, minimal, music-reactive background
+5. **Mode Introduction:** "Try Free Play mode for real-time system audio!"
+6. **Main Menu:** Clean, minimal, music-reactive background
 
 ### Main Menu
-- **Ride** (Start Free Ride)
+- **Play** (Enter MP3 Mode song selection)
+- **Free Play** (Start casual real-time mode)
 - **Challenges**
 - **Garage** (Motorcycle & customization)
 - **Leaderboards**
@@ -389,13 +485,35 @@ If technically feasible, use audio fingerprinting (like AcoustID / Shazam API) t
 
 Background: Animated desert highway with music-reactive elements even in menu
 
-### In-Game Session
-1. Player selects "Ride"
-2. "Press Start when your music is playing" prompt
-3. 3-2-1 countdown synced to music
-4. Ride begins
-5. Song ends → Results screen
-6. Options: Replay, New Song, Main Menu
+### In-Game Session (MP3 Mode)
+1. Player selects "Play"
+2. Song library screen appears
+   - Grid/list of imported MP3s with album art
+   - Shows personal best score and rank for each
+   - "Import New Song" button (opens file browser)
+3. Player selects a song (or imports new MP3)
+4. If new import:
+   - "Analyzing song..." progress bar
+   - Pre-analysis of audio (10-30 seconds)
+   - "Song ready!" confirmation
+5. Loading screen with song info
+6. 3-2-1 countdown (synced to music start)
+7. Ride begins
+8. Song ends → Results screen with:
+   - Score breakdown
+   - Personal best comparison
+   - Leaderboard position
+   - Options: Replay, New Song, Main Menu
+
+### In-Game Session (Free Play Mode)
+1. Player selects "Free Play"
+2. "Start playing music on your computer" prompt
+3. Detect audio → "Music detected! Get ready..."
+4. 3-2-1 countdown synced to current audio
+5. Ride begins
+6. Player can ride indefinitely or pause to end
+7. Results screen (no leaderboard, just stats)
+8. Options: Continue, Main Menu
 
 ### Results Screen
 - Score breakdown with animations
@@ -507,9 +625,15 @@ There's no "Game Over" in Free Ride mode. If you crash, you respawn quickly and 
 
 ## 13. Inspirational Closing
 
-Desert Rider is more than a game—it's a **personal music visualizer that you can drive through**. Every song becomes a world. Every beat becomes an obstacle or opportunity. Every ride is unique because your music taste is unique.
+Desert Rider is more than a game—it's a **personal music visualizer that you can drive through**.
 
-This is for everyone who's ever felt that perfect song on a perfect drive and wished they could live in that moment forever.
+In **MP3 Mode**, every song becomes a racetrack you can master. Compete with friends, perfect your runs, and prove your skill on the songs you love.
+
+In **Free Play Mode**, every moment is unique improvisation. Cruise along to your Spotify playlist, discover how new artists feel, and just vibe with the music.
+
+Every song becomes a world. Every beat becomes an obstacle or opportunity. Your music collection becomes your personal game library.
+
+This is for everyone who's ever felt that perfect song on a perfect drive and wished they could live in that moment forever—and for those who want to master it, compete on it, and own it.
 
 **Let's build that feeling.**
 

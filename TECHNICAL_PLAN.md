@@ -28,8 +28,9 @@
 |-----------|-----------|-----------|
 | **Game Engine** | Unity 2022 LTS (or newer) | Best ecosystem for music-reactive games, proven beat detection libraries, strong 3D support, excellent controller integration |
 | **Programming Language** | C# | Native Unity support, excellent performance, strong type safety, great for game logic |
-| **Audio Capture** | NAudio + WASAPI Loopback | Industry-standard Windows audio capture, low latency, captures all system audio sources |
-| **Beat Detection** | Unity-Beat-Detection (GitHub) | Open-source, FFT-based, proven in music games, easy integration |
+| **MP3 Loading & Decoding** | NAudio (Mp3FileReader) | Read MP3 files, decode to PCM, extract waveform data for analysis |
+| **Beat Detection** | Unity-Beat-Detection (GitHub) + Essentia (optional) | FFT-based analysis, works on both pre-loaded MP3s and real-time audio |
+| **System Audio Capture (Free Play)** | NAudio + WASAPI Loopback | Real-time audio capture for Free Play mode only |
 | **Advanced Audio (Optional)** | Essentia C++ Library | Professional-grade rhythm extraction, ML-based BPM detection, multi-platform |
 | **Controller Input** | XInput API | Native Windows Xbox controller support, vibration/haptics, up to 4 controllers |
 | **Terrain Generation** | Perlin/Simplex Noise | Procedural heightmap generation, smooth organic shapes, music-driven parameters |
@@ -60,93 +61,142 @@
 ### High-Level Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     SYSTEM AUDIO                            │
-│              (Spotify, YouTube, Local Files)                 │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 AUDIO CAPTURE MODULE                         │
-│  ┌────────────────────────────────────────────────────┐    │
-│  │  WASAPI Loopback (NAudio)                          │    │
-│  │  - Captures system audio in real-time              │    │
-│  │  - Sample rate: 44.1kHz or 48kHz                   │    │
-│  │  - Buffer size: 512-2048 samples                   │    │
-│  └────────────────────────────────────────────────────┘    │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│               BEAT DETECTION ENGINE                          │
-│  ┌────────────────────────────────────────────────────┐    │
-│  │  Audio Analyzer                                     │    │
-│  │  - FFT Analysis (frequency spectrum)               │    │
-│  │  - Spectral Flux (energy changes)                  │    │
-│  │  - Beat Detection (peak picking)                   │    │
-│  │  - BPM Estimation                                  │    │
-│  │  - Intensity Calculation                           │    │
-│  └────────────────────────────────────────────────────┘    │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│              GAMEPLAY CONTROLLER (Hub)                       │
-│  - Receives beat/BPM/intensity data                         │
-│  - Translates to gameplay parameters                        │
-│  - Manages game state and synchronization                   │
-└─────┬──────────┬──────────┬──────────┬────────────┬─────────┘
-      │          │          │          │            │
-      ▼          ▼          ▼          ▼            ▼
-┌──────────┐ ┌──────┐ ┌──────────┐ ┌───────┐ ┌──────────┐
-│ TERRAIN  │ │MOTOR-│ │OBSTACLE  │ │ SCORE │ │  VISUAL  │
-│GENERATOR │ │CYCLE │ │ SPAWNER  │ │ SYSTEM│ │  EFFECTS │
-│          │ │      │ │          │ │       │ │          │
-│- Perlin  │ │- Phy-│ │- Traffic │ │- Coins│ │- Partcl. │
-│  noise   │ │  sics│ │- Rocks   │ │- Combo│ │- Camera  │
-│- Music   │ │- Ctrl│ │- Beat    │ │- Multi│ │- Shader  │
-│  driven  │ │  input│ │  sync   │ │  plier│ │  effects │
-└──────────┘ └──────┘ └──────────┘ └───────┘ └──────────┘
+                    ┌─── MP3 MODE ───┐         ┌─ FREE PLAY MODE ─┐
+                    │                │         │                   │
+                    ▼                │         ▼                   │
+        ┌──────────────────────┐    │  ┌──────────────────┐      │
+        │   MP3 FILE LIBRARY   │    │  │   SYSTEM AUDIO   │      │
+        │  (Local Game Folder) │    │  │ (Spotify, YouTube│      │
+        └──────────┬───────────┘    │  └────────┬─────────┘      │
+                   │                │           │                 │
+                   ▼                │           ▼                 │
+      ┌────────────────────────┐   │  ┌──────────────────────┐  │
+      │  MP3 LOADER & DECODER  │   │  │   WASAPI LOOPBACK    │  │
+      │   (NAudio Mp3Reader)   │   │  │    (Real-time)       │  │
+      │ - Load full MP3 file   │   │  │ - Capture streaming  │  │
+      │ - Decode to PCM        │   │  │ - Live audio buffer  │  │
+      │ - Extract waveform     │   │  └──────────┬───────────┘  │
+      └────────────┬───────────┘   │             │               │
+                   │                │             │               │
+                   ▼                │             ▼               │
+      ┌────────────────────────┐   │  ┌──────────────────────┐  │
+      │  PRE-ANALYSIS ENGINE   │   │  │   REAL-TIME ANALYZER │  │
+      │ - Analyze FULL song    │   │  │ - Live FFT analysis  │  │
+      │ - Build complete beat  │   │  │ - Beat detection     │  │
+      │   map & intensity curve│   │  │ - Dynamic intensity  │  │
+      │ - Generate level seed  │   │  └──────────┬───────────┘  │
+      │ - Hash for leaderboard │   │             │               │
+      └────────────┬───────────┘   │             │               │
+                   │                │             │               │
+                   └────────────────┴─────────────┘               │
+                                    │                             │
+                                    ▼                             │
+                   ┌─────────────────────────────────┐            │
+                   │    BEAT DETECTION ENGINE        │            │
+                   │  - Common analysis algorithms   │            │
+                   │  - FFT, spectral flux, peaks   │            │
+                   │  - BPM, intensity, beat times  │            │
+                   └──────────────┬──────────────────┘            │
+                                  │                               │
+                                  ▼                               │
+                   ┌─────────────────────────────────┐            │
+                   │    GAMEPLAY CONTROLLER          │            │
+                   │  - Receives beat/intensity data │            │
+                   │  - Translates to game params    │            │
+                   │  - Manages state & sync         │            │
+                   │  - Level seeding (MP3 mode)     │            │
+                   └────┬──────┬──────┬──────┬───────┘            │
+                        │      │      │      │                    │
+       ┌────────────────┴──────┴──────┴──────┴─────────┐          │
+       ▼          ▼         ▼         ▼        ▼        ▼         │
+  ┌────────┐ ┌───────┐ ┌────────┐ ┌──────┐ ┌────┐ ┌────────┐    │
+  │TERRAIN │ │ MOTOR │ │OBSTACLE│ │ SCORE│ │VFX │ │LEADER- │    │
+  │  GEN   │ │ CYCLE │ │SPAWNER │ │SYSTEM│ │    │ │ BOARD  │    │
+  │        │ │       │ │        │ │      │ │    │ │(MP3 only)   │
+  │-Seeded │ │-Phys  │ │-Seeded │ │-Coins│ │    │ │-Per-song│    │
+  │ (MP3)  │ │-Input │ │ (MP3)  │ │-Combo│ │    │ │ scores │    │
+  │-Dynamic│ │       │ │-Dynamic│ │      │ │    │ └────────┘    │
+  │ (Free) │ │       │ │ (Free) │ │      │ │    │               │
+  └────────┘ └───────┘ └────────┘ └──────┘ └────┘               │
+                                                                  │
+                                                                  │
+                                                                  │
+                                                                  │
 ```
 
 ### Core Modules
 
-#### 1. **Audio Capture Module** (`AudioCaptureManager.cs`)
+#### 1. **MP3 Library Manager** (`MP3LibraryManager.cs`)
+- Handles MP3 file import and copying to local storage
+- Extracts ID3 tags (title, artist, album, album art)
+- Generates audio hash for leaderboard matching
+- Manages song library (browse, search, filter)
+- Stores high scores per MP3
+
+#### 2. **MP3 Loader & Pre-Analyzer** (`MP3Loader.cs`, `PreAnalyzer.cs`)
+- Loads MP3 files using NAudio's Mp3FileReader
+- Decodes entire song to PCM waveform
+- Performs complete FFT analysis on full audio
+- Builds beat map, intensity curve, BPM for entire song
+- Generates deterministic level seed from audio features
+
+#### 3. **Audio Capture Module** (`AudioCaptureManager.cs`) - Free Play Only
 - Initializes WASAPI loopback recording
-- Continuously captures system audio buffer
+- Continuously captures system audio buffer in real-time
 - Provides raw audio samples to beat detector
 - Handles audio device changes and errors
 
-#### 2. **Beat Detection Engine** (`BeatDetector.cs`, `MusicAnalyzer.cs`)
+#### 4. **Beat Detection Engine** (`BeatDetector.cs`, `MusicAnalyzer.cs`)
+- **MP3 Mode:** Analyzes complete waveform, returns full beat/intensity data structure
+- **Free Play Mode:** Analyzes real-time audio stream, outputs current beat/intensity
 - Performs FFT on audio samples
 - Calculates spectral flux
 - Detects beat onsets using peak detection
 - Estimates BPM via inter-beat interval analysis
 - Outputs normalized intensity (0-1 scale)
 
-#### 3. **Terrain Generator** (`TerrainGenerator.cs`)
+#### 5. **Level Seed Generator** (`LevelSeeder.cs`) - MP3 Mode Only
+- Takes complete audio analysis data
+- Generates deterministic seed from beat patterns and intensity curve
+- Same MP3 always produces same seed = same level
+- Seed controls: terrain noise parameters, obstacle spawn positions, coin placements
+
+#### 6. **Terrain Generator** (`TerrainGenerator.cs`)
+- **MP3 Mode:** Seeded procedural generation (same seed = same terrain)
+- **Free Play Mode:** Dynamic real-time generation
 - Procedurally generates road chunks ahead of player
-- Uses Perlin noise for heightmap elevation
-- Modulates noise parameters based on music intensity
+- Uses Perlin noise with music-driven parameters
+- Modulates noise amplitude/frequency based on intensity
 - Manages chunk lifecycle (creation, pooling, destruction)
 
-#### 4. **Motorcycle Controller** (`MotorcycleController.cs`)
+#### 7. **Motorcycle Controller** (`MotorcycleController.cs`)
 - Handles player input (controller/keyboard)
 - Arcade physics simulation
 - Speed tied to BPM
 - Collision detection and response
 
-#### 5. **Obstacle Spawner** (`ObstacleSpawner.cs`)
+#### 8. **Obstacle Spawner** (`ObstacleSpawner.cs`)
+- **MP3 Mode:** Seeded spawn positions (deterministic)
+- **Free Play Mode:** Real-time reactive spawning
 - Spawns traffic, rocks, barriers on beats
 - Density scales with music intensity
-- Pools objects for performance
+- Object pooling for performance
 
-#### 6. **Score & Collectibles Manager** (`CollectibleManager.cs`, `ScoreSystem.cs`)
+#### 9. **Score & Collectibles Manager** (`CollectibleManager.cs`, `ScoreSystem.cs`)
+- **MP3 Mode:** Seeded coin placements
+- **Free Play Mode:** Dynamic coin patterns
 - Spawns coins in music-reactive patterns
 - Tracks collection, combo multiplier
 - Calculates score with bonuses
 
-#### 7. **Visual Effects System** (`VisualEffectsController.cs`)
+#### 10. **Leaderboard System** (`LeaderboardManager.cs`) - MP3 Mode Only
+- Per-song leaderboards (matched by audio hash)
+- Local high score storage
+- Optional: Online leaderboard integration
+- Prevents cheating by validating level seed matches audio
+- Friend comparisons and social features
+
+#### 11. **Visual Effects System** (`VisualEffectsController.cs`)
 - Particle effects synced to beats
 - Camera shake and zoom on intensity changes
 - Shader effects (bloom, color grading)
@@ -157,74 +207,92 @@
 ## 3. Development Phases
 
 ### Phase 1: Foundation & Prototype (Weeks 1-4)
-**Goal:** Prove the core concept—music reactivity works and feels good.
+**Goal:** Prove the core concept—MP3 analysis and deterministic level generation works.
 
 **Tasks:**
 1. **Unity Project Setup**
    - Create new Unity 2022 LTS project
    - Configure URP (Universal Render Pipeline)
    - Set up Git repository with .gitignore for Unity
+   - Create MusicLibrary folder structure
 
-2. **Audio Capture Implementation**
+2. **MP3 Loading Implementation (Primary Focus)**
    - Install NAudio via NuGet
-   - Implement `AudioCaptureManager.cs` with WASAPI loopback
-   - Test capturing system audio (play music, verify waveform in debug)
-   - Handle audio device enumeration and selection
+   - Implement `MP3Loader.cs` with Mp3FileReader
+   - Load and decode sample MP3 to PCM
+   - Extract full waveform data
+   - Display waveform in debug UI
 
-3. **Basic Beat Detection**
+3. **Pre-Analysis System**
    - Integrate Unity-Beat-Detection from GitHub
-   - Implement FFT analysis on captured audio
-   - Detect simple beat onsets (spectral flux peaks)
-   - Visualize beats with debug UI (flash screen on beat)
+   - Implement full-song FFT analysis (not real-time)
+   - Detect all beats in complete MP3
+   - Calculate BPM from full song
+   - Build intensity curve for entire track
+   - Visualize analysis results (beat markers, intensity graph)
 
-4. **Simple Motorcycle Movement**
+4. **Level Seed Generation**
+   - Implement `LevelSeeder.cs`
+   - Generate deterministic seed from audio analysis data
+   - Test: same MP3 produces same seed every time
+   - Seed based on beat positions, BPM, intensity curve
+
+5. **Simple Motorcycle Movement**
    - Create basic motorcycle GameObject with Rigidbody
    - Implement forward movement at constant speed
    - Add left/right steering with keyboard/controller
    - Camera follows motorcycle (third-person view)
 
-5. **Flat Terrain Test**
-   - Create simple flat road mesh
-   - Motorcycle drives on road surface
+6. **Seeded Terrain Test**
+   - Create simple flat road that spawns from seed
+   - Test: same seed = same terrain every time
+   - Motorcycle drives on deterministic road surface
    - Test physics (gravity, collision)
 
-6. **Synchronization Test**
-   - Link detected beats to simple visual feedback
-   - Verify audio-visual sync (<50ms latency)
-   - Adjust buffer sizes if needed
+7. **MP3 Playback Sync**
+   - Play MP3 audio while riding
+   - Sync visual beat markers to actual playback time
+   - Verify music and gameplay stay in sync throughout song
+   - Test with multiple MP3s of different lengths
 
-**Deliverable:** Prototype where music plays, beats are detected, and a motorcycle drives on a flat road with visual beat feedback.
+**Deliverable:** Prototype where MP3 is loaded, analyzed, generates deterministic seed, and motorcycle rides on consistent level while music plays.
 
 ---
 
 ### Phase 2: Core Gameplay (Weeks 5-10)
-**Goal:** Full music-reactive gameplay loop—terrain changes with music, obstacles appear, coins collectible.
+**Goal:** Full MP3-based gameplay loop with seeded generation. Add Free Play mode as secondary feature.
 
 **Tasks:**
-1. **Refine Beat Detection**
-   - Implement BPM estimation algorithm
-   - Calculate music intensity (RMS energy, spectral flux variance)
-   - Smooth intensity values to avoid jittery changes
-   - Add calibration settings (sensitivity sliders)
-
-2. **Procedural Terrain Generation**
-   - Implement Perlin noise heightmap generator
-   - Create terrain chunks (e.g., 100m x 20m)
+1. **Seeded Procedural Terrain Generation (MP3 Mode)**
+   - Implement seeded Perlin noise heightmap generator
+   - Create terrain chunks (e.g., 100m x 20m) from seed
    - Spawn chunks ahead of player, despawn behind
-   - Modulate noise amplitude/frequency based on music intensity
+   - Modulate noise parameters based on pre-analyzed intensity curve
+   - Test: same MP3 creates same terrain every time
 
-3. **Music-Reactive Terrain Modulation**
-   - High intensity → Higher amplitude noise (more hills)
+2. **Music-Reactive Terrain Modulation (Seeded)**
+   - High intensity sections → Higher amplitude noise (more hills)
    - High intensity → Higher frequency noise (more curves)
    - Low intensity → Smooth, flat terrain
-   - Road width narrows/widens based on intensity
+   - Road width narrows/widens based on intensity curve
+   - All driven by pre-analyzed data, not real-time
 
-4. **Obstacle System**
-   - Create traffic vehicle prefabs (simple models)
-   - Create rock/barrier prefabs
-   - Implement `ObstacleSpawner.cs` that spawns on beats
-   - Obstacle density scales with intensity
+3. **Seeded Obstacle System (MP3 Mode)**
+   - Create traffic vehicle prefabs, rock/barrier prefabs
+   - Implement `ObstacleSpawner.cs` with seeded spawning
+   - Obstacles spawn at specific beat positions (from pre-analysis)
+   - Obstacle density scales with intensity curve
    - Object pooling for performance
+   - Test: same song = same obstacles in same positions
+
+4. **Seeded Coin Collection & Scoring (MP3 Mode)**
+   - Create coin prefabs with glow/pulse effects
+   - Spawn coins in seeded patterns (deterministic positions)
+   - Coin placements based on beat map
+   - Implement collection on trigger enter
+   - Display score and combo multiplier in UI
+   - Combo resets on miss or crash
+   - Test: same song = same coin positions
 
 5. **Controller Input with Vibration**
    - Integrate XInput for Xbox controllers
@@ -232,20 +300,29 @@
    - Implement rumble on beats and collisions
    - Add keyboard controls as fallback
 
-6. **Coin Collection & Scoring**
-   - Create coin prefabs with glow/pulse effects
-   - Spawn coins along road in patterns
-   - Implement collection on trigger enter
-   - Display score and combo multiplier in UI
-   - Combo resets on miss or crash
-
-7. **Crash & Respawn System**
+6. **Crash & Respawn System**
    - Detect collisions with obstacles
-   - Quick respawn (no game over in Free Ride mode)
+   - Quick respawn with minimal penalty
    - Briefly reduce speed, reset combo
    - Visual/audio feedback on crash
 
-**Deliverable:** Fully playable core loop—ride motorcycle through music-reactive terrain, avoid obstacles, collect coins, see score.
+7. **Free Play Mode Implementation (Secondary)**
+   - Implement WASAPI loopback capture (`AudioCaptureManager.cs`)
+   - Real-time beat detection (reuse existing beat detector)
+   - Dynamic terrain/obstacle generation (non-seeded)
+   - Test with Spotify, YouTube playback
+   - No leaderboard integration for this mode
+   - Simple UI toggle to switch between MP3 and Free Play modes
+
+8. **High Score System (MP3 Mode Only)**
+   - Save high scores locally per MP3 (by hash)
+   - Display personal best on song selection
+   - Results screen shows score improvement
+   - Prepare data structures for future online leaderboards
+
+**Deliverable:**
+- **MP3 Mode:** Fully playable deterministic loop with high score tracking
+- **Free Play Mode:** Working real-time system audio mode for casual play
 
 ---
 
@@ -401,16 +478,241 @@
 
 ## 4. Technical Deep Dives
 
-### 4.1 Audio Capture Implementation (WASAPI + NAudio)
+### 4.1 MP3 Loading & Pre-Analysis (MP3 Mode)
+
+**Goal:** Load MP3 files, decode to PCM, and perform complete audio analysis before gameplay.
+
+**NAudio MP3 Support:**
+- NAudio includes `Mp3FileReader` class for decoding MP3s
+- Supports MP3, MP2, MP1 formats
+- Decodes to PCM (uncompressed audio samples)
+- Can read entire file into memory or stream
+
+**Implementation Steps:**
+
+1. **File Selection & Import:**
+```csharp
+using NAudio.Wave;
+using System.IO;
+using System.Security.Cryptography;
+
+public class MP3LibraryManager : MonoBehaviour
+{
+    private string libraryPath;
+
+    void Start()
+    {
+        libraryPath = Path.Combine(Application.persistentDataPath, "MusicLibrary");
+        Directory.CreateDirectory(libraryPath);
+    }
+
+    public async Task<SongData> ImportMP3(string filePath)
+    {
+        // Generate hash for file
+        string hash = GenerateFileHash(filePath);
+
+        // Create directory for this song
+        string songDir = Path.Combine(libraryPath, hash);
+        Directory.CreateDirectory(songDir);
+
+        // Copy MP3 to library
+        string destPath = Path.Combine(songDir, "song.mp3");
+        File.Copy(filePath, destPath, overwrite: true);
+
+        // Extract ID3 tags
+        var tagFile = TagLib.File.Create(destPath);
+        SongData songData = new SongData
+        {
+            Hash = hash,
+            Title = tagFile.Tag.Title ?? Path.GetFileNameWithoutExtension(filePath),
+            Artist = tagFile.Tag.FirstPerformer ?? "Unknown",
+            Album = tagFile.Tag.Album,
+            Duration = tagFile.Properties.Duration
+        };
+
+        // Trigger pre-analysis
+        await PreAnalyzeSong(destPath, songData);
+
+        return songData;
+    }
+
+    string GenerateFileHash(string filePath)
+    {
+        using (var md5 = MD5.Create())
+        using (var stream = File.OpenRead(filePath))
+        {
+            byte[] hash = md5.ComputeHash(stream);
+            return BitConverter.ToString(hash).Replace("-", "").ToLower();
+        }
+    }
+}
+```
+
+2. **MP3 Decoding & Waveform Extraction:**
+```csharp
+public class MP3Loader : MonoBehaviour
+{
+    public float[] LoadMP3Waveform(string mp3Path)
+    {
+        using (var reader = new Mp3FileReader(mp3Path))
+        {
+            // Get total sample count
+            long totalSamples = reader.Length / (reader.WaveFormat.BitsPerSample / 8);
+
+            // For stereo, convert to mono for analysis
+            int channels = reader.WaveFormat.Channels;
+            long monoSamples = totalSamples / channels;
+
+            // Read all samples
+            byte[] buffer = new byte[reader.Length];
+            reader.Read(buffer, 0, buffer.Length);
+
+            // Convert to float samples (assuming 16-bit PCM)
+            float[] samples = new float[monoSamples];
+            int sampleIndex = 0;
+
+            for (int i = 0; i < buffer.Length; i += 2 * channels)
+            {
+                // Convert 16-bit PCM to float (-1.0 to 1.0)
+                short left = BitConverter.ToInt16(buffer, i);
+
+                if (channels == 2)
+                {
+                    short right = BitConverter.ToInt16(buffer, i + 2);
+                    samples[sampleIndex++] = ((left + right) / 2) / 32768f;
+                }
+                else
+                {
+                    samples[sampleIndex++] = left / 32768f;
+                }
+            }
+
+            Debug.Log($"Loaded {samples.Length} samples from {mp3Path}");
+            return samples;
+        }
+    }
+}
+```
+
+3. **Pre-Analysis System:**
+```csharp
+public class PreAnalyzer : MonoBehaviour
+{
+    public async Task<AnalysisData> PreAnalyzeSong(string mp3Path, SongData songData)
+    {
+        // Load full waveform
+        float[] waveform = MP3Loader.LoadMP3Waveform(mp3Path);
+        int sampleRate = 44100; // Typically 44.1kHz for MP3
+
+        // Perform FFT analysis across entire song
+        List<BeatEvent> beats = new List<BeatEvent>();
+        List<float> intensityCurve = new List<float>();
+
+        int fftSize = 1024;
+        int hopSize = 512;
+        float[] previousSpectrum = new float[fftSize / 2];
+
+        for (int i = 0; i < waveform.Length - fftSize; i += hopSize)
+        {
+            // Extract window
+            float[] window = new float[fftSize];
+            Array.Copy(waveform, i, window, 0, fftSize);
+
+            // Perform FFT
+            float[] spectrum = PerformFFT(window);
+
+            // Calculate spectral flux
+            float flux = 0f;
+            for (int j = 0; j < spectrum.Length; j++)
+            {
+                flux += Mathf.Max(0, spectrum[j] - previousSpectrum[j]);
+            }
+
+            // Detect beat
+            if (flux > GetThreshold(intensityCurve))
+            {
+                float timeInSeconds = i / (float)sampleRate;
+                beats.Add(new BeatEvent { Time = timeInSeconds, Strength = flux });
+            }
+
+            // Calculate RMS intensity for this window
+            float intensity = CalculateRMS(window);
+            intensityCurve.Add(intensity);
+
+            previousSpectrum = spectrum;
+        }
+
+        // Estimate BPM from beat intervals
+        float bpm = EstimateBPM(beats);
+
+        // Generate deterministic seed
+        int seed = GenerateSeed(beats, intensityCurve, bpm);
+
+        AnalysisData analysis = new AnalysisData
+        {
+            Beats = beats,
+            IntensityCurve = intensityCurve,
+            BPM = bpm,
+            LevelSeed = seed,
+            SampleRate = sampleRate
+        };
+
+        // Save analysis to disk
+        SaveAnalysis(songData.Hash, analysis);
+
+        Debug.Log($"Analysis complete: {beats.Count} beats, {bpm} BPM, seed {seed}");
+        return analysis;
+    }
+
+    int GenerateSeed(List<BeatEvent> beats, List<float> intensityCurve, float bpm)
+    {
+        // Create deterministic seed from audio features
+        int seed = 0;
+
+        // Hash beat positions (first 100 beats)
+        for (int i = 0; i < Mathf.Min(100, beats.Count); i++)
+        {
+            seed ^= (int)(beats[i].Time * 1000) << (i % 16);
+        }
+
+        // Include BPM
+        seed ^= (int)(bpm * 100);
+
+        // Include average intensity
+        float avgIntensity = intensityCurve.Average();
+        seed ^= (int)(avgIntensity * 10000);
+
+        return seed;
+    }
+}
+```
+
+**Benefits of Pre-Analysis:**
+- **Accuracy:** Full song context improves beat detection
+- **Performance:** Analysis happens once during import, not every playthrough
+- **Determinism:** Same MP3 always produces same analysis = same level
+- **Quality:** Can use more expensive algorithms (Essentia) without real-time constraints
+
+**Storage:**
+- Analysis data saved as JSON/binary file alongside MP3
+- Loaded quickly when song is selected for play
+- No need to re-analyze on subsequent plays
+
+---
+
+### 4.2 System Audio Capture (WASAPI + NAudio) - Free Play Mode Only
+
+**Note:** This system is ONLY used in Free Play mode. MP3 mode uses direct file loading.
 
 **WASAPI (Windows Audio Session API):**
 - Windows API for low-latency audio capture
 - **Loopback mode:** Captures output audio ("what you hear")
 - Works with all audio sources (Spotify, YouTube, system sounds)
+- Not needed for MP3 mode (we have the files directly)
 
 **NAudio Library:**
 - Open-source .NET audio library
-- Provides `WasapiLoopbackCapture` class
+- Provides `WasapiLoopbackCapture` class for real-time capture
 - Easy integration with Unity (runs in background thread)
 
 **Implementation Steps:**
@@ -483,7 +785,11 @@ public class AudioCaptureManager : MonoBehaviour
 
 ---
 
-### 4.2 Beat Detection Algorithm
+### 4.3 Beat Detection Algorithm (Both Modes)
+
+**Works in both MP3 and Free Play modes, but applied differently:**
+- **MP3 Mode:** Applied to complete waveform during pre-analysis
+- **Free Play Mode:** Applied to real-time audio stream
 
 **Approach: Spectral Flux with Peak Detection**
 
@@ -585,7 +891,11 @@ For more accurate BPM/beat detection, integrate Essentia C++ library:
 
 ---
 
-### 4.3 Procedural Terrain Generation
+### 4.4 Procedural Terrain Generation (Seeded vs Dynamic)
+
+**Two Generation Modes:**
+- **MP3 Mode (Seeded):** Uses level seed to initialize Random state. Same seed = same terrain every time. Allows mastery and competition.
+- **Free Play Mode (Dynamic):** Uses current music intensity in real-time. Non-deterministic, unique every playthrough.
 
 **Approach: Perlin Noise Heightmap with Music Modulation**
 
@@ -593,8 +903,9 @@ For more accurate BPM/beat detection, integrate Essentia C++ library:
 - Generates smooth, organic-looking terrain
 - 2D noise function: `Noise(x, z)` returns height value
 - Parameters: amplitude (height scale), frequency (detail level), octaves (layering)
+- Can be seeded for deterministic output
 
-**Music-Driven Modulation:**
+**Seeded vs Dynamic Implementation:**
 ```csharp
 public class TerrainGenerator : MonoBehaviour
 {
@@ -603,7 +914,12 @@ public class TerrainGenerator : MonoBehaviour
     public float baseFrequency = 0.1f;
     public int octaves = 3;
 
-    // Music reactive scaling
+    // Mode-specific
+    public enum GenerationMode { MP3Seeded, FreePlayDynamic }
+    public GenerationMode mode;
+
+    private int levelSeed; // MP3 mode only
+    private System.Random seededRandom; // MP3 mode only
     private float intensityScale = 1f;
 
     // Chunk management
@@ -611,13 +927,28 @@ public class TerrainGenerator : MonoBehaviour
     private int chunksAhead = 5;
     private Queue<GameObject> activeChunks = new Queue<GameObject>();
 
+    public void InitializeMP3Mode(int seed, AnalysisData analysisData)
+    {
+        mode = GenerationMode.MP3Seeded;
+        levelSeed = seed;
+        seededRandom = new System.Random(seed);
+        this.analysisData = analysisData;
+    }
+
+    public void InitializeFreePlayMode()
+    {
+        mode = GenerationMode.FreePlayDynamic;
+    }
+
     void Update()
     {
-        // Get music intensity from BeatDetector
-        float intensity = BeatDetector.Instance.CurrentIntensity;
-
-        // Scale terrain difficulty
-        intensityScale = Mathf.Lerp(0.5f, 2f, intensity);
+        if (mode == GenerationMode.FreePlayDynamic)
+        {
+            // Free Play: Get real-time intensity
+            float intensity = BeatDetector.Instance.CurrentIntensity;
+            intensityScale = Mathf.Lerp(0.5f, 2f, intensity);
+        }
+        // MP3 mode intensity comes from pre-analyzed curve (in GenerateChunk)
 
         // Generate chunks ahead of player
         GenerateChunksIfNeeded();
@@ -717,7 +1048,7 @@ public class TerrainGenerator : MonoBehaviour
 
 ---
 
-### 4.4 Motorcycle Physics
+### 4.5 Motorcycle Physics (Same for Both Modes)
 
 **Arcade vs. Realistic:**
 - Focus on **arcade feel**—responsive, forgiving, fun over realism
@@ -831,19 +1162,29 @@ DesertRider/
 ├── Assets/
 │   ├── Scenes/
 │   │   ├── MainMenu.unity
+│   │   ├── SongSelection.unity
 │   │   ├── GameScene.unity
-│   │   └── Calibration.unity
+│   │   └── Calibration.unity (Free Play mode only)
 │   │
 │   ├── Scripts/
 │   │   ├── Core/
 │   │   │   ├── GameManager.cs
+│   │   │   ├── GameMode.cs (enum: MP3, FreePlay)
 │   │   │   └── SceneLoader.cs
 │   │   │
+│   │   ├── MP3/
+│   │   │   ├── MP3LibraryManager.cs
+│   │   │   ├── MP3Loader.cs
+│   │   │   ├── PreAnalyzer.cs
+│   │   │   ├── LevelSeeder.cs
+│   │   │   ├── SongData.cs (data class)
+│   │   │   └── AnalysisData.cs (data class)
+│   │   │
 │   │   ├── Audio/
-│   │   │   ├── AudioCaptureManager.cs
-│   │   │   ├── BeatDetector.cs
-│   │   │   ├── MusicAnalyzer.cs
-│   │   │   └── CalibrationSystem.cs
+│   │   │   ├── AudioCaptureManager.cs (Free Play only)
+│   │   │   ├── BeatDetector.cs (shared)
+│   │   │   ├── MusicAnalyzer.cs (shared)
+│   │   │   └── CalibrationSystem.cs (Free Play only)
 │   │   │
 │   │   ├── Gameplay/
 │   │   │   ├── MotorcycleController.cs
@@ -861,11 +1202,13 @@ DesertRider/
 │   │   ├── Scoring/
 │   │   │   ├── ScoreSystem.cs
 │   │   │   ├── ComboManager.cs
-│   │   │   └── Leaderboard.cs
+│   │   │   ├── LeaderboardManager.cs (MP3 mode)
+│   │   │   └── HighScoreStorage.cs (local persistence)
 │   │   │
 │   │   ├── UI/
 │   │   │   ├── HUDManager.cs
 │   │   │   ├── MenuController.cs
+│   │   │   ├── SongLibraryUI.cs (MP3 mode)
 │   │   │   ├── ResultsScreen.cs
 │   │   │   └── SettingsMenu.cs
 │   │   │
@@ -935,10 +1278,29 @@ DesertRider/
 │   ├── InputManager.asset
 │   └── QualitySettings.asset
 │
-├── .gitignore
+├── MusicLibrary/ (User data - excluded from git)
+│   ├── [song_hash_1]/
+│   │   ├── song.mp3
+│   │   ├── analysis.json
+│   │   └── metadata.json
+│   ├── [song_hash_2]/
+│   │   └── ...
+│   └── library_index.json
+│
+├── .gitignore (includes MusicLibrary/)
 ├── README.md
 ├── GDD.md
 └── TECHNICAL_PLAN.md (this file)
+```
+
+**MusicLibrary Structure Notes:**
+- Stored in `Application.persistentDataPath` (user's AppData on Windows)
+- Each song gets its own folder named by hash
+- `analysis.json`: Beat map, intensity curve, BPM, seed
+- `metadata.json`: Title, artist, album, duration, import date
+- `library_index.json`: Fast lookup for song library UI
+- NOT included in version control (.gitignore)
+- NOT included in game build (user imports their own music)
 ```
 
 ---
@@ -963,12 +1325,22 @@ DesertRider/
 
 ### Required Libraries
 
-#### NAudio (Audio Capture)
+#### NAudio (MP3 Loading & Audio Capture)
 - **Source:** NuGet package
 - **Installation:**
   1. Download NAudio.dll from NuGet
   2. Place in `Assets/Plugins/`
   3. Import in Unity
+- **Used For:**
+  - MP3 Mode: Mp3FileReader for loading/decoding MP3 files
+  - Free Play Mode: WasapiLoopbackCapture for system audio
+
+#### TagLib# (ID3 Tag Extraction)
+- **Source:** NuGet package
+- **Installation:**
+  1. Download TagLibSharp.dll from NuGet
+  2. Place in `Assets/Plugins/`
+- **Purpose:** Extract song metadata (title, artist, album, album art) from MP3 files
 
 #### Unity-Beat-Detection (Beat Detection)
 - **Source:** GitHub - [allanpichardo/Unity-Beat-Detection](https://github.com/allanpichardo/Unity-Beat-Detection)
@@ -1055,16 +1427,32 @@ DesertRider/
 ## 9. Testing Strategy
 
 ### Unit Testing
-- **Audio Capture:** Verify WASAPI captures system audio correctly
-- **Beat Detection:** Test with known BPM songs, verify accuracy
-- **Terrain Generation:** Ensure no seams between chunks
+- **MP3 Loading:** Verify MP3s load correctly, decode to PCM without errors
+- **Pre-Analysis:** Test with known BPM songs, verify analysis accuracy
+- **Determinism:** Same MP3 produces same seed, same level every time
+- **Audio Capture (Free Play):** Verify WASAPI captures system audio correctly
+- **Beat Detection:** Test both pre-analysis and real-time modes
+- **Terrain Generation:** Ensure no seams between chunks (both modes)
 - **Collision Detection:** Verify all obstacles trigger crashes
 - **Score System:** Validate combo multipliers, bonuses
+- **High Scores:** Verify saving/loading per MP3 hash works correctly
 
 ### Integration Testing
+
+**MP3 Mode:**
+- **Import Flow:** Select MP3 → Analysis → Appears in library → Can play
+- **Deterministic Playthrough:** Play same song 3 times, verify identical level
+- **High Score Persistence:** Set high score, restart game, verify it loads
+- **Leaderboard Matching:** Two players with same MP3 have same level/hash
+
+**Free Play Mode:**
 - **End-to-End:** Play music, ride motorcycle, verify reactivity
 - **Audio-Visual Sync:** Measure latency (should be <50ms)
+- **Multiple Sources:** Test Spotify, YouTube, local player
+
+**Both Modes:**
 - **Performance:** Profile during 5+ minute sessions
+- **Mode Switching:** Switch between MP3 and Free Play without crashes
 
 ### Genre Testing
 Test with diverse music styles to ensure beat detection works:
@@ -1090,7 +1478,34 @@ Test with diverse music styles to ensure beat detection works:
 
 ## 10. Known Challenges & Solutions
 
-### Challenge 1: WASAPI Latency
+### Challenge 1: MP3 Pre-Analysis Time
+**Problem:** Large MP3 files (5+ minutes) may take 10-30 seconds to analyze, causing import delays.
+
+**Solutions:**
+- Show progress bar during analysis
+- Allow background import (analyze while user browses library)
+- Cache analysis results permanently
+- Consider using Essentia (faster than Unity-Beat-Detection for batch processing)
+- Future: Offer "Quick Import" with basic analysis, "Deep Analysis" as optional
+
+**Mitigation:** Only happens once per song; subsequent plays load instantly from cached analysis.
+
+---
+
+### Challenge 2: Storage Space for MP3 Library
+**Problem:** Users importing large music collections consume disk space.
+
+**Solutions:**
+- Optional: Reference MP3s instead of copying (but risky if user moves files)
+- Compression for analysis data (JSON can be gzipped)
+- Cleanup tool for unused songs
+- Display storage usage in settings
+
+**Mitigation:** Most users won't import entire library, just favorite songs for competition.
+
+---
+
+### Challenge 3: WASAPI Latency (Free Play Mode Only)
 **Problem:** Audio capture may have noticeable delay between music and visuals.
 
 **Solutions:**
@@ -1103,16 +1518,16 @@ Test with diverse music styles to ensure beat detection works:
 
 ---
 
-### Challenge 2: Beat Detection Accuracy Varies by Genre
+### Challenge 4: Beat Detection Accuracy Varies by Genre
 **Problem:** Electronic music has clear beats; classical music is complex and variable.
 
 **Solutions:**
-- Adjustable sensitivity slider (per-genre profiles)
-- Use Essentia library for ML-based beat tracking (more accurate)
+- **MP3 Mode (Preferred):** Use Essentia for pre-analysis (no real-time constraints, very accurate)
+- **Free Play Mode:** Adjustable sensitivity slider, per-genre profiles
 - Frequency-specific beat detection (focus on bass for kicks)
 - Smoothing/averaging to reduce false positives
 
-**Mitigation:** Default to "good enough" with option for advanced tuning.
+**Mitigation:** MP3 mode can use expensive, accurate algorithms. Free Play mode defaults to "good enough" with calibration options.
 
 ---
 
@@ -1264,26 +1679,29 @@ Test with diverse music styles to ensure beat detection works:
 4. Download NAudio, XInput, Unity-Beat-Detection libraries
 5. Set up project structure (folders for Scripts, Prefabs, etc.)
 
-### Week 2: Audio Capture POC
-1. Implement `AudioCaptureManager.cs` with WASAPI
-2. Test capturing Spotify, YouTube, local music
-3. Visualize waveform in Unity (debug display)
-4. Verify low latency
+### Week 2: MP3 Loading & Analysis POC
+1. Implement `MP3Loader.cs` with NAudio Mp3FileReader
+2. Load sample MP3, decode to PCM, visualize waveform
+3. Implement `PreAnalyzer.cs`
+4. Analyze full MP3: extract beats, BPM, intensity curve
+5. Display analysis results (beat markers on timeline)
 
-### Week 3: Beat Detection POC
-1. Integrate Unity-Beat-Detection
-2. Detect beats, display visual flash on screen
-3. Estimate BPM, display in UI
-4. Test with different music genres
+### Week 3: Deterministic Level Seeding
+1. Implement `LevelSeeder.cs`
+2. Generate seed from audio analysis
+3. Test: same MP3 produces same seed reliably
+4. Create simple seeded terrain generator
+5. Verify: same seed = same terrain every time
 
-### Week 4: Prototype Gameplay
+### Week 4: Prototype Gameplay (MP3 Mode)
 1. Create simple motorcycle controller
-2. Generate flat road
+2. Generate seeded terrain that plays alongside MP3
 3. Sync motorcycle speed to BPM
-4. Add one obstacle that spawns on beats
-5. Test the "feel"—does music reactivity work?
+4. Add seeded obstacle that spawns on beats
+5. Test the "feel"—does deterministic music reactivity work?
+6. Play same song 3 times, verify identical experience
 
-**Milestone:** If Week 4 prototype feels good, proceed with full development!
+**Milestone:** If Week 4 prototype demonstrates determinism and feels good, proceed with full MP3 mode development! Add Free Play mode in Phase 2.
 
 ---
 
