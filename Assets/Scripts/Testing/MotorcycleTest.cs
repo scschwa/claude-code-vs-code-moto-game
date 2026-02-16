@@ -57,6 +57,7 @@ namespace DesertRider.Testing
         public bool enableMusic = true;
 
         private float furthestGeneratedZ = 0f;
+        private float sessionStartTime = 0f;
 
         void Start()
         {
@@ -92,6 +93,17 @@ namespace DesertRider.Testing
                 }
             }
 
+            // Auto-detect song end and submit score
+            if (musicPlayer != null && analysisData != null && sessionStartTime > 0f)
+            {
+                // Song has ended (music stopped playing and we're past the duration)
+                if (!musicPlayer.IsPlaying && Time.time - sessionStartTime > analysisData.Duration + 1f)
+                {
+                    EndSession();
+                    sessionStartTime = 0f; // Prevent repeated calls
+                }
+            }
+
             // Reset controls
             if (Input.GetKeyDown(KeyCode.R))
             {
@@ -107,6 +119,12 @@ namespace DesertRider.Testing
                     furthestGeneratedZ = terrainGenerator.segmentLength * terrainGenerator.activeSegmentCount;
                     Debug.Log("Terrain regenerated");
                 }
+            }
+
+            // Manual end session (for testing)
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                EndSession();
             }
         }
 
@@ -202,7 +220,34 @@ namespace DesertRider.Testing
             {
                 Debug.Log("Step 6: Starting music playback...");
                 musicPlayer.PlayMP3(mp3FilePath);
+                sessionStartTime = Time.time; // Track session start for end detection
                 Debug.Log("✅ Music playing");
+            }
+
+            // Step 7: Initialize BoostSystem
+            Debug.Log("Step 7: Initializing BoostSystem...");
+            if (DesertRider.Gameplay.BoostSystem.Instance != null && motorcycle != null)
+            {
+                DesertRider.Gameplay.BoostSystem.Instance.Initialize(analysisData, motorcycle, musicPlayer);
+                Debug.Log("✅ BoostSystem initialized");
+            }
+
+            // Step 8: Initialize VisualController
+            Debug.Log("Step 8: Initializing VisualController...");
+            if (motorcycle != null)
+            {
+                DesertRider.Gameplay.MotorcycleVisualController visualController =
+                    motorcycle.GetComponent<DesertRider.Gameplay.MotorcycleVisualController>();
+                if (visualController != null)
+                {
+                    visualController.Initialize(analysisData, musicPlayer, motorcycle, cameraFollow,
+                        DesertRider.Gameplay.BoostSystem.Instance);
+                    Debug.Log("✅ VisualController initialized");
+                }
+                else
+                {
+                    Debug.LogWarning("VisualController component not found on motorcycle");
+                }
             }
 
             Debug.Log("🎉 Gameplay initialized! Use WASD/Arrows to drive!");
@@ -295,6 +340,22 @@ namespace DesertRider.Testing
                 go.AddComponent<DesertRider.Gameplay.ObjectPoolManager>();
                 Debug.Log("MotorcycleTest: Created ObjectPoolManager (configure coin pool in Inspector!)");
             }
+
+            // BoostSystem
+            if (DesertRider.Gameplay.BoostSystem.Instance == null)
+            {
+                GameObject go = new GameObject("BoostSystem");
+                go.AddComponent<DesertRider.Gameplay.BoostSystem>();
+                Debug.Log("MotorcycleTest: Created BoostSystem");
+            }
+
+            // LeaderboardManager
+            if (DesertRider.Core.LeaderboardManager.Instance == null)
+            {
+                GameObject go = new GameObject("LeaderboardManager");
+                go.AddComponent<DesertRider.Core.LeaderboardManager>();
+                Debug.Log("MotorcycleTest: Created LeaderboardManager");
+            }
         }
 
         /// <summary>
@@ -345,6 +406,9 @@ namespace DesertRider.Testing
                 motorcycle = motorcycleGO.AddComponent<MotorcycleController>();
             }
 
+            // Add visual controller (will be initialized later in InitializeGameplay)
+            motorcycleGO.AddComponent<DesertRider.Gameplay.MotorcycleVisualController>();
+
             Debug.Log($"Motorcycle spawned at {motorcycleSpawnPosition}");
         }
 
@@ -364,6 +428,68 @@ namespace DesertRider.Testing
 
                 Debug.Log("Motorcycle reset to start position");
             }
+        }
+
+        /// <summary>
+        /// Ends the current gameplay session and submits score to leaderboard.
+        /// </summary>
+        [ContextMenu("End Session and Submit Score")]
+        public void EndSession()
+        {
+            if (DesertRider.Gameplay.ScoreManager.Instance == null)
+            {
+                Debug.LogWarning("Cannot end session: ScoreManager not found");
+                return;
+            }
+
+            // Get final stats
+            int finalScore = DesertRider.Gameplay.ScoreManager.Instance.currentScore;
+            int coins = DesertRider.Gameplay.ScoreManager.Instance.coinsCollected;
+            int maxCombo = DesertRider.Gameplay.ScoreManager.Instance.maxCombo;
+
+            Debug.Log("=== SESSION ENDED ===");
+            Debug.Log($"Final Score: {finalScore}");
+            Debug.Log($"Coins Collected: {coins}");
+            Debug.Log($"Max Combo: {maxCombo}");
+
+            // Submit to leaderboard
+            if (DesertRider.Core.LeaderboardManager.Instance != null && analysisData != null)
+            {
+                // Create temporary SongData for submission
+                // In production, this would come from the MP3 library system
+                DesertRider.MP3.SongData songData = new DesertRider.MP3.SongData
+                {
+                    Hash = "test_hash_" + mp3FilePath.GetHashCode().ToString(), // Temporary hash
+                    Title = System.IO.Path.GetFileNameWithoutExtension(mp3FilePath),
+                    AnalysisData = analysisData
+                };
+
+                bool success = DesertRider.Core.LeaderboardManager.Instance.SubmitScore(
+                    songData,
+                    "TestPlayer",
+                    finalScore,
+                    coins,
+                    maxCombo
+                );
+
+                if (success)
+                {
+                    Debug.Log("✅ Score submitted to leaderboard");
+                    Debug.Log($"📁 Leaderboard path: {DesertRider.Core.LeaderboardManager.Instance.GetLeaderboardsPath()}");
+                }
+                else
+                {
+                    Debug.LogWarning("⚠️ Score submission failed");
+                }
+            }
+
+            // Stop music
+            if (musicPlayer != null)
+            {
+                musicPlayer.Stop();
+            }
+
+            sessionStartTime = 0f;
         }
 
         /// <summary>
@@ -429,8 +555,29 @@ namespace DesertRider.Testing
                 }
             }
 
-            GUI.Label(new Rect(20, 160, 280, 20), "WASD/Arrows: Drive", style);
-            GUI.Label(new Rect(20, 180, 280, 20), "R: Reset | T: Regen Terrain", style);
+            // Display boost charges
+            if (DesertRider.Gameplay.BoostSystem.Instance != null)
+            {
+                string chargeDisplay = "";
+                for (int i = 0; i < DesertRider.Gameplay.BoostSystem.Instance.MaxCharges; i++)
+                {
+                    chargeDisplay += (i < DesertRider.Gameplay.BoostSystem.Instance.CurrentCharges) ? "⚡" : "○";
+                }
+
+                GUIStyle boostStyle = new GUIStyle(style);
+                boostStyle.fontSize = 20;
+                boostStyle.normal.textColor = DesertRider.Gameplay.BoostSystem.Instance.IsBoosting ? Color.yellow : Color.cyan;
+
+                GUI.Label(new Rect(20, 160, 280, 30), $"Boost: {chargeDisplay}", boostStyle);
+
+                if (DesertRider.Gameplay.BoostSystem.Instance.IsBoosting)
+                {
+                    GUI.Label(new Rect(20, 190, 280, 20), ">>> BOOST ACTIVE <<<", boostStyle);
+                }
+            }
+
+            GUI.Label(new Rect(20, 220, 280, 20), "WASD/Arrows: Drive | SPACE: Boost", style);
+            GUI.Label(new Rect(20, 240, 280, 20), "R: Reset | T: Regen | E: End Session", style);
         }
     }
 }
