@@ -144,6 +144,7 @@ namespace DesertRider.Terrain
         /// </summary>
         void OnDestroy()
         {
+            Debug.LogError($"[SegmentObjectTracker] OnDestroy() CALLED on {gameObject.name}! StackTrace: {UnityEngine.StackTraceUtility.ExtractStackTrace()}");
             CleanupAllObjects();
         }
     }

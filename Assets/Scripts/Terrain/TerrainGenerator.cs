@@ -44,7 +44,7 @@ namespace DesertRider.Terrain
 
         [Header("Music Reactivity")]
         [Tooltip("Multiplier for intensity-based height variation")]
-        public float intensityHeightMultiplier = 5f;
+        public float intensityHeightMultiplier = 2.0f; // Balanced for visible music reactivity
 
         [Tooltip("Multiplier for curve variation")]
         public float curveMultiplier = 0.5f;
@@ -60,7 +60,7 @@ namespace DesertRider.Terrain
         public float perlinScale = 0.1f;
 
         [Tooltip("Strength of Perlin noise height offset")]
-        public float perlinStrength = 2f;
+        public float perlinStrength = 0.5f; // Moderate variation for organic feel
 
         [Header("Gameplay")]
         [Tooltip("Estimated player speed for time-to-distance conversion")]
@@ -83,6 +83,12 @@ namespace DesertRider.Terrain
         private Vector3 nextSegmentPosition = Vector3.zero;
         private Quaternion nextSegmentRotation = Quaternion.identity;
         private float[] previousSegmentEndHeights = null; // Store last row of heights from previous segment
+        private RoadEdgeRenderer edgeRenderer; // Handles glowing road edges
+
+        /// <summary>
+        /// Gets the Z position of the furthest generated segment.
+        /// </summary>
+        public float FurthestGeneratedZ => nextSegmentPosition.z;
 
         /// <summary>
         /// Initializes terrain generation with music analysis data.
@@ -100,6 +106,23 @@ namespace DesertRider.Terrain
             seededRandom = new System.Random(data.LevelSeed);
 
             Debug.Log($"TerrainGenerator: Initialized with seed {data.LevelSeed}, {data.IntensityCurve.Count} intensity samples");
+
+            // Create default material if none assigned
+            if (roadMaterial == null)
+            {
+                roadMaterial = new Material(Shader.Find("Standard"));
+                roadMaterial.color = new Color(0.05f, 0.05f, 0.05f); // Very dark, almost black
+                roadMaterial.SetFloat("_Metallic", 0.2f);
+                roadMaterial.SetFloat("_Glossiness", 0.6f); // Slightly glossy for visual interest
+                Debug.Log("TerrainGenerator: Created dark road material");
+            }
+
+            // Initialize edge renderer for glowing road edges
+            if (edgeRenderer == null)
+            {
+                edgeRenderer = gameObject.AddComponent<RoadEdgeRenderer>();
+                Debug.Log("TerrainGenerator: Created RoadEdgeRenderer for glowing edges");
+            }
 
             // Clear existing segments
             ClearAllSegments();
@@ -144,6 +167,7 @@ namespace DesertRider.Terrain
                 segmentObj.AddComponent<MeshFilter>();
                 segmentObj.AddComponent<MeshRenderer>();
                 segmentObj.AddComponent<RoadSegment>();
+                Debug.Log($"TerrainGenerator: Created segment {currentSegmentIndex} at position {nextSegmentPosition}");
             }
 
             RoadSegment segment = segmentObj.GetComponent<RoadSegment>();
@@ -208,6 +232,12 @@ namespace DesertRider.Terrain
             if (roadMaterial != null)
             {
                 segment.SetMaterial(roadMaterial);
+            }
+
+            // Add glowing edges to segment
+            if (edgeRenderer != null)
+            {
+                edgeRenderer.AddEdgesToSegment(segmentObj, segmentLength, roadWidth);
             }
             else
             {
@@ -364,10 +394,12 @@ namespace DesertRider.Terrain
         /// </summary>
         public void ClearAllSegments()
         {
+            Debug.LogWarning($"[TerrainGenerator] ClearAllSegments() called! Destroying {activeSegments.Count} segments. StackTrace: {UnityEngine.StackTraceUtility.ExtractStackTrace()}");
             foreach (var segment in activeSegments)
             {
                 if (segment != null)
                 {
+                    Debug.Log($"[TerrainGenerator] Destroying {segment.gameObject.name}");
                     Destroy(segment.gameObject);
                 }
             }
@@ -384,6 +416,7 @@ namespace DesertRider.Terrain
 
         void OnDestroy()
         {
+            Debug.LogError($"[TerrainGenerator] OnDestroy() CALLED! TerrainGenerator is being DESTROYED! This will destroy all road segments. StackTrace: {UnityEngine.StackTraceUtility.ExtractStackTrace()}");
             ClearAllSegments();
         }
     }

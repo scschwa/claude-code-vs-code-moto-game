@@ -75,6 +75,7 @@ namespace DesertRider.Gameplay
         public bool debugMode = false;
 
         private System.Random seededRandom;
+        private bool hasWarnedObjectPoolMissing = false;
 
         /// <summary>
         /// Initializes spawner with analysis data.
@@ -114,10 +115,11 @@ namespace DesertRider.Gameplay
                 return;
             }
 
-            if (ObjectPoolManager.Instance == null)
+            // ObjectPoolManager is optional - we can spawn without it
+            if (ObjectPoolManager.Instance == null && !hasWarnedObjectPoolMissing)
             {
-                Debug.LogError("CollectibleSpawner: ObjectPoolManager not found!");
-                return;
+                Debug.LogWarning("CollectibleSpawner: ObjectPoolManager not found, using direct instantiation (less efficient)");
+                hasWarnedObjectPoolMissing = true;
             }
 
             // Initialize random if needed
@@ -317,11 +319,65 @@ namespace DesertRider.Gameplay
         /// </summary>
         private GameObject SpawnCoin(Vector3 position, SegmentObjectTracker tracker)
         {
-            GameObject coin = ObjectPoolManager.Instance.Get("Coin");
-            if (coin == null)
+            GameObject coin;
+
+            // Try to use ObjectPoolManager if available
+            if (ObjectPoolManager.Instance != null)
             {
-                Debug.LogWarning("CollectibleSpawner: Failed to get coin from pool");
-                return null;
+                coin = ObjectPoolManager.Instance.Get("Coin");
+                if (coin == null)
+                {
+                    Debug.LogWarning("CollectibleSpawner: Failed to get coin from pool");
+                    return null;
+                }
+            }
+            else
+            {
+                // Fallback: Create a simple sphere as a coin
+                coin = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                coin.name = "Coin";
+                coin.transform.localScale = Vector3.one * 0.5f;
+                // Skip tag - "Collectible" tag doesn't exist in project
+                coin.layer = 0; // Default layer
+
+                // Add gold emissive material with HDR emission for intense bloom glow
+                Renderer renderer = coin.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    Material goldMaterial = new Material(Shader.Find("Standard"));
+
+                    // Gold color
+                    Color goldColor = new Color(1f, 0.84f, 0f); // Rich gold
+
+                    // Dark base color (emission will provide the glow)
+                    goldMaterial.SetColor("_Color", goldColor * 0.3f);
+
+                    // HDR Emission for intense bloom (values > 1.0 bloom with post-processing)
+                    goldMaterial.EnableKeyword("_EMISSION");
+                    Color hdrEmission = goldColor * 4f; // HDR intensity for strong bloom
+                    goldMaterial.SetColor("_EmissionColor", hdrEmission);
+                    goldMaterial.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+
+                    // Metallic properties for gold appearance
+                    goldMaterial.SetFloat("_Metallic", 0.9f); // Very metallic
+                    goldMaterial.SetFloat("_Glossiness", 1f); // Maximum glossiness
+
+                    renderer.material = goldMaterial;
+                }
+
+                // Add trigger collider
+                SphereCollider collider = coin.GetComponent<SphereCollider>();
+                if (collider != null)
+                {
+                    collider.isTrigger = true;
+                }
+
+                // Add Collectible component if it exists
+                var collectibleType = System.Type.GetType("DesertRider.Gameplay.Collectible");
+                if (collectibleType != null)
+                {
+                    coin.AddComponent(collectibleType);
+                }
             }
 
             coin.transform.position = position;

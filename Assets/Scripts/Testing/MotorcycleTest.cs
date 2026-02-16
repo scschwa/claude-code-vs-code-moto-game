@@ -388,6 +388,7 @@ namespace DesertRider.Testing
                 // Add Rigidbody
                 Rigidbody rb = motorcycleGO.AddComponent<Rigidbody>();
                 rb.mass = 100f;
+                rb.collisionDetectionMode = CollisionDetectionMode.Continuous; // Prevent tunneling through terrain
 
                 // Add MotorcycleController
                 motorcycleGO.AddComponent<MotorcycleController>();

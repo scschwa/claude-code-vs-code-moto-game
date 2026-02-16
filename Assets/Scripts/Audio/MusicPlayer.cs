@@ -63,6 +63,7 @@ namespace DesertRider.Audio
                 currentMP3Path = mp3Path;
 
                 Debug.Log($"MusicPlayer: Now playing {System.IO.Path.GetFileName(mp3Path)}");
+                Debug.Log($"MusicPlayer: AudioSource state - isPlaying: {audioSource.isPlaying}, volume: {audioSource.volume}, mute: {audioSource.mute}, clip length: {clip.length}s");
             }
             catch (System.Exception e)
             {

@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Linq;
 
 namespace DesertRider.Gameplay
 {
@@ -344,13 +345,92 @@ namespace DesertRider.Gameplay
         private void CheckGround()
         {
             RaycastHit hit;
-            IsGrounded = Physics.Raycast(
-                transform.position,
-                Vector3.down,
-                out hit,
-                hoverHeight + 1f,
-                groundLayer
-            );
+
+            // Force physics system to update collider positions
+            Physics.SyncTransforms();
+
+            // NEW APPROACH: Start raycast from ABOVE motorcycle to avoid starting inside CapsuleCollider
+            Vector3 rayStart = transform.position + Vector3.up * 2f;
+
+            // Cast multiple rays to find terrain, ignoring self
+            RaycastHit[] hits = Physics.RaycastAll(rayStart, Vector3.down, 100f);
+
+            // Find first hit that is NOT the motorcycle
+            bool foundGround = false;
+            RaycastHit groundHit = new RaycastHit();
+
+            foreach (RaycastHit h in hits)
+            {
+                if (h.collider.gameObject != gameObject) // Ignore self
+                {
+                    foundGround = true;
+                    groundHit = h;
+                    hit = h;
+                    break;
+                }
+            }
+
+            // Check if ground is within reasonable distance (7 units)
+            IsGrounded = foundGround && groundHit.distance <= 7f;
+
+            // SANITY CHECK: Use OverlapSphere to see if ANY colliders exist nearby
+            Collider[] nearbyColliders = Physics.OverlapSphere(transform.position, 20f);
+
+            // DEBUG: Log ALL colliders found before filtering
+            if (Time.frameCount % 30 == 0)
+            {
+                if (nearbyColliders.Length > 0)
+                {
+                    string allColliders = string.Join(", ", nearbyColliders.Select(c => $"{c.gameObject.name}({c.GetType().Name})"));
+                    Debug.Log($"[CheckGround] ALL colliders found by OverlapSphere: {allColliders}");
+                }
+
+                // CRITICAL TEST: Check if RoadSegment_0 still exists
+                GameObject roadSegment0 = GameObject.Find("RoadSegment_0");
+                if (roadSegment0 != null)
+                {
+                    BoxCollider bc = roadSegment0.GetComponent<BoxCollider>();
+                    Debug.Log($"[CheckGround] RoadSegment_0 EXISTS - Active: {roadSegment0.activeInHierarchy}, " +
+                        $"Position: {roadSegment0.transform.position}, " +
+                        $"HasBoxCollider: {bc != null}, " +
+                        $"BoxColliderEnabled: {bc?.enabled}, " +
+                        $"BoxColliderBounds: {bc?.bounds}");
+                }
+                else
+                {
+                    Debug.LogError("[CheckGround] RoadSegment_0 DOES NOT EXIST!");
+                }
+            }
+
+            // Filter for BoxColliders specifically (road segments now use BoxCollider)
+            var boxColliders = nearbyColliders.Where(c => c is BoxCollider && c.gameObject != gameObject).ToArray();
+
+            // Debug: Log ground detection every 30 frames (about twice per second)
+            if (Time.frameCount % 30 == 0)
+            {
+                Debug.Log($"[CheckGround] Position: {transform.position}, " +
+                    $"RayStart: {rayStart}, " +
+                    $"Grounded: {IsGrounded}, " +
+                    $"FoundGround: {foundGround}, " +
+                    $"HitObject: {(foundGround ? groundHit.collider.gameObject.name : "None")}, " +
+                    $"HitLayer: {(foundGround ? groundHit.collider.gameObject.layer.ToString() : "N/A")}, " +
+                    $"Distance: {(foundGround ? groundHit.distance.ToString("F2") : "N/A")}, " +
+                    $"ColliderType: {(foundGround ? groundHit.collider.GetType().Name : "N/A")}, " +
+                    $"TotalNearbyColliders: {nearbyColliders.Length}, " +
+                    $"BoxColliders: {boxColliders.Length}, " +
+                    $"AllHits: {hits.Length}");
+
+                // Log BoxColliders found
+                if (boxColliders.Length > 0)
+                {
+                    string boxList = string.Join(", ", boxColliders.Select(c => $"{c.gameObject.name}"));
+                    Debug.Log($"[CheckGround] BoxColliders found: {boxList}");
+                }
+                else
+                {
+                    Debug.LogWarning("[CheckGround] NO BoxColliders found! Road segments are invisible to physics!");
+                }
+            }
         }
 
         /// <summary>
@@ -362,7 +442,8 @@ namespace DesertRider.Gameplay
                 return;
 
             RaycastHit hit;
-            if (Physics.Raycast(transform.position, Vector3.down, out hit, hoverHeight + 1f, groundLayer))
+            // Check further down (5 units) WITHOUT layer mask (matching CheckGround)
+            if (Physics.Raycast(transform.position, Vector3.down, out hit, 5f))
             {
                 float distanceToGround = hit.distance;
                 float hoverError = hoverHeight - distanceToGround;
@@ -446,7 +527,44 @@ namespace DesertRider.Gameplay
             // Log for debugging
             Debug.Log($"Motorcycle collided with: {collision.gameObject.name} (tag: {collision.gameObject.tag})");
 
+            // Check if this is ground collision
+            if (collision.gameObject.name.StartsWith("RoadSegment"))
+            {
+                IsGrounded = true;
+                Debug.Log($"Motorcycle grounded via OnCollisionEnter with {collision.gameObject.name}");
+            }
+
             // Obstacle handles the actual penalty via ApplySpeedPenalty
+        }
+
+        /// <summary>
+        /// Called every frame while motorcycle is touching something.
+        /// </summary>
+        void OnCollisionStay(Collision collision)
+        {
+            // Check if we're still touching ground
+            if (collision.gameObject.name.StartsWith("RoadSegment"))
+            {
+                IsGrounded = true;
+                // Log occasionally for debugging
+                if (Time.frameCount % 60 == 0)
+                {
+                    Debug.Log($"Motorcycle STILL grounded via OnCollisionStay with {collision.gameObject.name}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Called when motorcycle stops touching something.
+        /// </summary>
+        void OnCollisionExit(Collision collision)
+        {
+            // Check if we left the ground
+            if (collision.gameObject.name.StartsWith("RoadSegment"))
+            {
+                IsGrounded = false;
+                Debug.Log($"Motorcycle left ground via OnCollisionExit from {collision.gameObject.name}");
+            }
         }
     }
 }

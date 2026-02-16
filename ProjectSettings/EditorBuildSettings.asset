@@ -4,6 +4,21 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/MainMenu.unity
+    guid: a8f64a26d58b90449a22eb46d88f5701
+  - enabled: 1
+    path: Assets/Scenes/SongSelection.unity
+    guid: 8aa52a142d92b19458d4a81489d8fde9
+  - enabled: 1
+    path: Assets/Scenes/Loading.unity
+    guid: 6be61c8bb7cb4ce4092d20dc976af45c
+  - enabled: 1
+    path: Assets/Scenes/Gameplay.unity
+    guid: 4eb81b285619ea14fa4ef58833532ed9
+  - enabled: 1
+    path: Assets/Scenes/Results.unity
+    guid: 735ed407a9b01bd41b103a6e4ffb9c58
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

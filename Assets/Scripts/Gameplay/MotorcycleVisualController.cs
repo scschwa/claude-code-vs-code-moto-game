@@ -15,7 +15,7 @@ namespace DesertRider.Gameplay
         #region Configuration
         [Header("Visual Configuration")]
         [Tooltip("Enable debug logging")]
-        public bool debugMode = false;
+        public bool debugMode = true; // Enabled to verify music reactivity
 
         [Header("Color Palette")]
         [Tooltip("Primary cyan glow color")]
@@ -51,7 +51,7 @@ namespace DesertRider.Gameplay
 
         [Tooltip("Beat strength for camera shake")]
         [Range(0f, 1f)]
-        public float beatShakeThreshold = 0.85f;
+        public float beatShakeThreshold = 10.0f; // DISABLED - was causing uncontrollable camera shake (set to 10.0 so it never triggers)
 
         [Tooltip("Beat detection window (seconds)")]
         public float beatDetectionWindow = 0.15f;
@@ -118,6 +118,17 @@ namespace DesertRider.Gameplay
                 originalShakeIntensity = cameraFollow.shakeIntensity;
             }
 
+            // Hide original motorcycle primitive (capsule/mesh) to prevent double rendering
+            MeshRenderer originalRenderer = GetComponent<MeshRenderer>();
+            if (originalRenderer != null)
+            {
+                originalRenderer.enabled = false;
+                if (debugMode)
+                {
+                    Debug.Log("MotorcycleVisualController: Disabled original capsule renderer");
+                }
+            }
+
             // Build visual components
             BuildTronMotorcycle();
             SetupTrailRenderer();
@@ -147,8 +158,25 @@ namespace DesertRider.Gameplay
 
         void Update()
         {
+            // ALWAYS log once at start to verify Update is being called
+            if (Time.frameCount == 100)
+            {
+                Debug.LogError($"[DIAGNOSTIC] VisualController Update IS BEING CALLED - isInit:{isInitialized}, player:{musicPlayer != null}, playing:{musicPlayer?.IsPlaying ?? false}, debugMode:{debugMode}");
+            }
+
             if (!isInitialized || musicPlayer == null || !musicPlayer.IsPlaying)
+            {
+                if (Time.frameCount % 60 == 0) // ALWAYS log, ignore debugMode
+                {
+                    Debug.LogWarning($"[VisualController] Update BLOCKED - isInit:{isInitialized}, player:{musicPlayer != null}, playing:{musicPlayer?.IsPlaying ?? false}, Time:{Time.time:F2}s");
+                }
                 return;
+            }
+
+            if (Time.frameCount % 60 == 0) // ALWAYS log, ignore debugMode
+            {
+                Debug.Log($"[VisualController] Update RUNNING - Time:{musicPlayer.CurrentTime:F2}s, Intensity:{currentIntensity:F2}");
+            }
 
             // Update music-reactive intensity
             UpdateIntensity();
@@ -355,6 +383,10 @@ namespace DesertRider.Gameplay
         {
             if (analysisData == null || analysisData.IntensityCurve == null || analysisData.IntensityCurve.Count == 0)
             {
+                if (Time.frameCount % 120 == 0) // Log every 2 seconds
+                {
+                    Debug.LogError($"[VisualController] UpdateIntensity BLOCKED - analysisData:{analysisData != null}, curve:{analysisData?.IntensityCurve != null}, count:{analysisData?.IntensityCurve?.Count ?? 0}");
+                }
                 targetIntensity = 0.3f;
                 return;
             }
@@ -370,6 +402,12 @@ namespace DesertRider.Gameplay
 
             // Smooth lerp to target
             currentIntensity = Mathf.Lerp(currentIntensity, targetIntensity, Time.deltaTime * 5f);
+
+            // Log intensity values periodically
+            if (Time.frameCount % 120 == 0) // Log every 2 seconds
+            {
+                Debug.Log($"[VisualController] Intensity - raw:{intensity:F3}, target:{targetIntensity:F3}, current:{currentIntensity:F3}, time:{currentTime:F2}s, duration:{analysisData.Duration:F2}s");
+            }
         }
 
         /// <summary>

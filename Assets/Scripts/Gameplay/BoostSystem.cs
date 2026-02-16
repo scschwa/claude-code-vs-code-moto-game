@@ -49,7 +49,7 @@ namespace DesertRider.Gameplay
 
         [Header("Debug")]
         [Tooltip("Show beat detection debug logs")]
-        public bool debugMode = false;
+        public bool debugMode = true; // Enabled to verify music reactivity
 
         // State
         private int currentCharges = 0;
@@ -102,6 +102,18 @@ namespace DesertRider.Gameplay
 
         void Update()
         {
+            // ALWAYS log once at start to verify Update is being called
+            if (Time.frameCount == 100)
+            {
+                Debug.LogError($"[DIAGNOSTIC] BoostSystem Update IS BEING CALLED - player:{musicPlayer != null}, playing:{musicPlayer?.IsPlaying ?? false}, data:{analysisData != null}, debugMode:{debugMode}");
+            }
+
+            // Log every 2 seconds to verify Update is running
+            if (Time.frameCount % 120 == 0)
+            {
+                Debug.Log($"[BoostSystem] Update IS RUNNING - Frame:{Time.frameCount}, Time:{Time.time:F2}s, player:{musicPlayer != null}, playing:{musicPlayer?.IsPlaying ?? false}");
+            }
+
             // Beat detection and charge granting
             DetectBeats();
 
@@ -119,9 +131,20 @@ namespace DesertRider.Gameplay
         {
             // Skip if music isn't playing or data is missing
             if (musicPlayer == null || !musicPlayer.IsPlaying || analysisData == null || analysisData.Beats == null)
+            {
+                if (Time.frameCount % 60 == 0) // ALWAYS log, ignore debugMode
+                {
+                    Debug.LogWarning($"[BoostSystem] DetectBeats BLOCKED - player:{musicPlayer != null}, playing:{musicPlayer?.IsPlaying ?? false}, data:{analysisData != null}, beats:{analysisData?.Beats?.Count ?? 0}");
+                }
                 return;
+            }
 
             float currentTime = musicPlayer.CurrentTime;
+
+            if (Time.frameCount % 120 == 0) // ALWAYS log, ignore debugMode
+            {
+                Debug.Log($"[BoostSystem] Detecting beats - Time:{currentTime:F2}s, LastBeatIndex:{lastBeatIndex}/{analysisData.Beats.Count}, Charges:{currentCharges}/{maxCharges}");
+            }
 
             // Iterate through beats starting from lastBeatIndex + 1
             for (int i = lastBeatIndex + 1; i < analysisData.Beats.Count; i++)

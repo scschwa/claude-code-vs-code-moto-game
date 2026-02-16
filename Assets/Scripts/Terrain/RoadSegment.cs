@@ -182,17 +182,46 @@ namespace DesertRider.Terrain
 
             meshFilter.mesh = mesh;
 
-            // Add/update MeshCollider for collision detection
-            MeshCollider meshCollider = GetComponent<MeshCollider>();
-            if (meshCollider == null)
+            // WORKAROUND: Use BoxCollider instead of MeshCollider (Unity 6 MeshCollider bug)
+            // Remove any existing MeshCollider
+            MeshCollider oldMeshCollider = GetComponent<MeshCollider>();
+            if (oldMeshCollider != null)
             {
-                meshCollider = gameObject.AddComponent<MeshCollider>();
+                Destroy(oldMeshCollider);
             }
-            meshCollider.sharedMesh = mesh;
-            meshCollider.convex = false; // Better for static terrain
+
+            // Add/update BoxCollider for collision detection
+            BoxCollider boxCollider = GetComponent<BoxCollider>();
+            if (boxCollider == null)
+            {
+                boxCollider = gameObject.AddComponent<BoxCollider>();
+                Debug.Log($"RoadSegment: Added BoxCollider to {gameObject.name}");
+            }
+
+            // Set BoxCollider to match mesh bounds
+            Bounds meshBounds = mesh.bounds;
+            boxCollider.center = meshBounds.center;
+
+            // CRITICAL FIX: Ensure BoxCollider has minimum thickness in Y direction
+            // Flat colliders (Y=0) can miss raycasts due to floating-point precision
+            Vector3 size = meshBounds.size;
+            size.y = Mathf.Max(size.y, 1.0f); // Minimum 1 meter thickness
+            boxCollider.size = size;
 
             // Ensure GameObject is on Default layer (0) for collision detection
             gameObject.layer = 0;
+
+            // CRITICAL FIX: Force physics system to register this collider immediately
+            Physics.SyncTransforms();
+
+            // CRITICAL DEBUG: Verify BoxCollider is actually working
+            bool colliderEnabled = boxCollider.enabled;
+            bool goActive = gameObject.activeInHierarchy;
+
+            Debug.Log($"RoadSegment {gameObject.name}: BoxCollider VERIFICATION - " +
+                $"Center: {boxCollider.center}, Size: {boxCollider.size}, " +
+                $"ColliderEnabled: {colliderEnabled}, GameObjectActive: {goActive}, " +
+                $"Layer: {gameObject.layer}, Bounds: {boxCollider.bounds}");
 
             // Return end heights for next segment
             return endHeights;

@@ -42,10 +42,10 @@ namespace DesertRider.Gameplay
 
         [Header("Shake")]
         [Tooltip("Enable camera shake at high speeds")]
-        public bool enableShake = true;
+        public bool enableShake = false; // Disabled due to accumulation issue
 
         [Tooltip("Max shake intensity")]
-        public float shakeIntensity = 0.2f;
+        public float shakeIntensity = 0.02f; // Reduced from 0.2 to prevent excessive shake
 
         private Camera cam;
         private Vector3 velocity = Vector3.zero;
