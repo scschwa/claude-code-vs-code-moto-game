@@ -11,7 +11,16 @@
       "Bash(git clone:*)",
       "Bash(uuidgen:*)",
       "Bash(test:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git -C \"c:/Users/svenftw/OneDrive/claude_code_vscode-moto-game\" log --oneline)",
+      "Bash(git -C \"c:/Users/svenftw/OneDrive/claude_code_vscode-moto-game\" log --format=\"%an\")",
+      "Bash(git -C \"C:\\\\Users\\\\svenftw\\\\OneDrive\\\\claude_code_vscode-moto-game\" log --oneline)",
+      "Bash(echo:*)",
+      "Bash(awk:*)",
+      "Bash(git hash-object:*)",
+      "Bash(git check-attr:*)",
+      "Bash(git log:*)",
+      "Bash(git -C \"c:\\\\Users\\\\svenftw\\\\OneDrive\\\\claude_code_vscode-moto-game\" log --oneline -20)"
     ]
   }
 }

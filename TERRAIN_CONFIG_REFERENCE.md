@@ -284,7 +284,6 @@ moto.airControlMultiplier = 0.3f;
 
 For detailed information, see:
 - `TERRAIN_ENHANCEMENTS_GUIDE.md` - Full feature guide
-- `FEATURE_3_IMPLEMENTATION_SUMMARY.md` - Implementation details
 
 For code reference, see:
 - `Assets/Scripts/Terrain/TerrainFeatureConfig.cs`
